@@ -4412,7 +4412,7 @@ export default function AdminPage() {
                 <div className="muted">e강의평가 · {APP_VERSION}</div>
               </div>
             </div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <div className="btn-row">
               <button className="btn secondary" onClick={() => setTab("home")}>홈</button>
               <button className="btn secondary" onClick={loadData}>새로고침</button>
             </div>
@@ -5559,7 +5559,7 @@ export default function AdminPage() {
                 <h1 className="h1">QR 출력</h1>
                 <p className="muted">선생님·반별 QR을 출력해 교실에서 나눠주면 됩니다.</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="btn-row">
                 <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => setSelectedQrPeriodId(e.target.value)}>
                   {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
                 </select>
@@ -6031,7 +6031,7 @@ export default function AdminPage() {
                 <h1 className="h1">선생님별 결과지 생성</h1>
                 <p className="muted">현재 버전은 출력용 PDF와 웹문서 리포트 링크를 함께 지원합니다. 웹 리포트는 PDF보다 넓고 큰 글씨로 읽기 쉽게 표시됩니다.</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="btn-row">
                 <button className="btn secondary" onClick={loadData}>데이터 새로고침</button>
                 <button className="btn" onClick={() => generatePdfExports(false)} disabled={pdfBusy}>
                   {pdfBusy ? "PDF 생성 중..." : "PDF 자동 생성/저장"}
@@ -6325,7 +6325,7 @@ export default function AdminPage() {
                 <h1 className="h1">리포트 링크 관리</h1>
                 <p className="muted">선생님별 웹문서 리포트 링크를 열람하고 Slack DM으로 발송합니다. 링크는 기본적으로 만료되지 않습니다.</p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="btn-row">
                 <select className="select" value={selectedReportPeriod?.id || ""} onChange={(e) => setSelectedReportPeriodId(e.target.value)} style={{ maxWidth: 180 }}>
                   {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
                 </select>
@@ -6494,7 +6494,7 @@ export default function AdminPage() {
                   서버에 보관한 PDF와 웹 리포트 저장본을 다시 열 수 있습니다. 원장 내부 확인용은 별도 표시되며 직원 발송 정책과 함께 보관됩니다.
                 </p>
               </div>
-              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <div className="btn-row">
                 <button className="btn secondary" onClick={loadData}>이력 새로고침</button>
                 <button className="btn" onClick={() => setTab("report")}>결과지 생성하러 가기</button>
                 <button className="btn soft" onClick={() => downloadReportExportsZip("period")} disabled={zipBusy}>

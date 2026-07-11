@@ -252,12 +252,27 @@ button {
 .btn-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
+  gap: 8px;
   align-items: center;
 }
 
 .btn-row.end {
   justify-content: flex-end;
+}
+
+/* 상단 툴바 버튼은 풀사이즈보다 한 단계 컴팩트하게 (제목 옆에서 덜 무겁게) */
+.btn-row .btn {
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: var(--fs-label);
+  border-radius: 10px;
+}
+
+.btn-row .select,
+.btn-row .input {
+  min-height: 38px;
+  padding: 8px 12px;
+  width: auto;
 }
 
 /* uniform quick-action tiles (equal width, neat rows) */
