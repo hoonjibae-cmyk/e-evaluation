@@ -5086,9 +5086,11 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="card" style={{ marginTop: 18 }}>
-              <h2 className="h2">선생님별 반 복수 배정</h2>
-              <div className="grid grid-3">
+            <details className="card" style={{ marginTop: 18 }}>
+              <summary style={{ cursor: "pointer", fontSize: "var(--fs-h2)", fontWeight: 800, letterSpacing: "-0.02em" }}>
+                선생님별 반 복수 배정 <span className="muted small" style={{ fontWeight: 600 }}>· 체크박스로 직접 선택 (필요할 때만 펼치기)</span>
+              </summary>
+              <div className="grid grid-3" style={{ marginTop: 14 }}>
                 <Field label="평가월">
                   <select
                     className="select"
@@ -5172,7 +5174,7 @@ export default function AdminPage() {
                   );
                 })}
               </div>
-            </div>
+            </details>
 
             <div className="table-wrap" style={{ marginTop: 18 }}>
               <table>
