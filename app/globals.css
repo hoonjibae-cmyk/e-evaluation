@@ -533,6 +533,36 @@ td.num, th.num {
   text-align: right;
 }
 
+/* compact inputs inside data tables → shorter rows, more rows visible */
+td .input, td .select {
+  padding: 8px 11px;
+  border-radius: 10px;
+  min-width: 0;
+}
+
+/* tidy per-row action cluster: small buttons, one line, destructive split off */
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.row-actions .btn {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: var(--fs-label);
+  border-radius: 9px;
+}
+
+.row-actions .sep {
+  flex: none;
+  width: 1px;
+  height: 22px;
+  background: var(--line-strong);
+  margin: 0 3px;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

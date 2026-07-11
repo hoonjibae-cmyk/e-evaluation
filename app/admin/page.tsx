@@ -4667,19 +4667,20 @@ export default function AdminPage() {
                         <td><input className="input" value={draft.memo || ""} onChange={(e) => setTeacherDrafts((prev) => ({ ...prev, [teacher.id]: { ...draft, memo: e.target.value } }))} /></td>
                         <td>{draft.is_active ? <span className="badge ok">사용중</span> : <span className="badge">비활성</span>}</td>
                         <td>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button className="btn secondary" onClick={() => updateTeacher(teacher.id)}>저장</button>
-                            <button className="btn secondary" onClick={() => lookupSlackUser(teacher.id)} disabled={slackBusy === `lookup-${teacher.id}`}>
-                              {slackBusy === `lookup-${teacher.id}` ? "연결 확인 중..." : "Slack 연결 확인"}
+                          <div className="row-actions">
+                            <button className="btn soft sm" onClick={() => updateTeacher(teacher.id)}>저장</button>
+                            <button className="btn secondary sm" onClick={() => lookupSlackUser(teacher.id)} disabled={slackBusy === `lookup-${teacher.id}`}>
+                              {slackBusy === `lookup-${teacher.id}` ? "연결 확인 중..." : "연결 확인"}
                             </button>
-                            <button className="btn secondary" onClick={() => sendSlackTest(teacher.id)} disabled={slackBusy === `test-${teacher.id}`}>
+                            <button className="btn secondary sm" onClick={() => sendSlackTest(teacher.id)} disabled={slackBusy === `test-${teacher.id}`}>
                               {slackBusy === `test-${teacher.id}` ? "DM 발송 중..." : "테스트 DM"}
                             </button>
-                            <button className="btn danger" onClick={() => updateTeacher(teacher.id, { is_active: !draft.is_active })}>
+                            <span className="sep" aria-hidden="true"></span>
+                            <button className="btn danger sm" onClick={() => updateTeacher(teacher.id, { is_active: !draft.is_active })}>
                               {draft.is_active ? "비활성화" : "다시 사용"}
                             </button>
                             {currentAdmin?.role === "super_admin" && (
-                              <button className="btn danger" onClick={() => deleteTeacherHard(teacher)}>
+                              <button className="btn danger sm" onClick={() => deleteTeacherHard(teacher)}>
                                 삭제
                               </button>
                             )}
