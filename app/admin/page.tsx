@@ -64,8 +64,8 @@ const menuGroups: { title: string; description: string; items: TabKey[] }[] = [
   },
   {
     title: "기본 설정",
-    description: "평가월, 선생님, 반, 배정을 준비합니다.",
-    items: ["periods", "teachers", "classes", "assignments", "bulk"]
+    description: "평가월, 선생님, 배정을 준비합니다.",
+    items: ["periods", "teachers", "assignments", "bulk"]
   },
   {
     title: "설문 운영",
@@ -5090,6 +5090,7 @@ export default function AdminPage() {
               <summary style={{ cursor: "pointer", fontSize: "var(--fs-h2)", fontWeight: 800, letterSpacing: "-0.02em" }}>
                 선생님별 반 복수 배정 <span className="muted small" style={{ fontWeight: 600 }}>· 체크박스로 직접 선택 (필요할 때만 펼치기)</span>
               </summary>
+              <div>
               <div className="grid grid-3" style={{ marginTop: 14 }}>
                 <Field label="평가월">
                   <select
@@ -5173,6 +5174,7 @@ export default function AdminPage() {
                     </label>
                   );
                 })}
+              </div>
               </div>
             </details>
 
