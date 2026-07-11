@@ -201,7 +201,12 @@ button {
 .btn.secondary {
   background: #fff;
   color: var(--text);
-  border: 1px solid var(--line);
+  border: 1px solid var(--line-strong);
+}
+
+.btn.secondary:hover {
+  background: var(--surface-2);
+  filter: none;
 }
 
 .btn.soft {
@@ -209,13 +214,68 @@ button {
   color: var(--accent-soft-ink);
 }
 
+.btn.soft:hover {
+  filter: brightness(0.98);
+}
+
 .btn.danger {
-  background: #fee2e2;
+  background: #fdecec;
   color: var(--danger);
+  border: 1px solid #f6d4d4;
+}
+
+.btn.danger:hover {
+  background: #fbe0e0;
+  filter: none;
 }
 
 .btn.full {
   width: 100%;
+}
+
+/* size variants */
+.btn.sm {
+  min-height: 34px;
+  padding: 6px 12px;
+  font-size: var(--fs-label);
+  border-radius: 10px;
+}
+
+.btn.lg {
+  min-height: 50px;
+  padding: 13px 22px;
+  font-size: var(--fs-h3);
+  border-radius: 14px;
+}
+
+/* generic action toolbar — even gap, wraps cleanly, right-alignable */
+.btn-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.btn-row.end {
+  justify-content: flex-end;
+}
+
+/* uniform quick-action tiles (equal width, neat rows) */
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.quick-actions .btn {
+  width: 100%;
+  min-height: 48px;
+}
+
+@media (max-width: 520px) {
+  .quick-actions {
+    grid-template-columns: 1fr 1fr;
+  }
 }
 
 

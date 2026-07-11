@@ -4432,7 +4432,7 @@ export default function AdminPage() {
                 <Stat label="중복 의심 응답" value={`${duplicateResponses}건`} onClick={() => goToResponses("duplicate")} />
               </div>
 
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 20 }}>
+              <div className="quick-actions" style={{ marginTop: 20 }}>
                 <button className="btn" onClick={() => setTab("checklist")}>운영 체크리스트</button>
                 <button className="btn secondary" onClick={() => setTab("periods")}>평가월 만들기</button>
                 <button className="btn secondary" onClick={() => setTab("assignments")}>선생님-반 배정</button>
