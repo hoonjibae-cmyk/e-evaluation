@@ -5107,6 +5107,14 @@ export default function AdminPage() {
               <div className="card" style={{ marginTop: 18 }}>
                 <h2 className="h2">처리 결과</h2>
                 <p>{bulkResult.message}</p>
+                {!!bulkResult.failed?.length && (
+                  <div className="notice" style={{ marginTop: 12, borderColor: "var(--danger)" }}>
+                    <b style={{ color: "var(--danger)" }}>저장 실패 (이 줄들만 다시 업로드하세요)</b>
+                    <ul>
+                      {bulkResult.failed.map((item: string) => <li key={item}>{item}</li>)}
+                    </ul>
+                  </div>
+                )}
                 {!!bulkResult.skipped?.length && (
                   <div className="notice" style={{ marginTop: 12 }}>
                     <b>확인 필요</b>

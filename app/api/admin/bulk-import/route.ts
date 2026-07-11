@@ -355,8 +355,10 @@ export async function POST(request: NextRequest) {
 
       let processed = 0;
       const skipped: string[] = [];
+      const failed: string[] = [];
 
       for (let i = 0; i < rows.length; i++) {
+       try {
         const [
           studentNameRaw,
           teacherKeyRaw,
@@ -482,25 +484,38 @@ export async function POST(request: NextRequest) {
 
         if (answerRows.length) {
           const answersInsert = await supabase.from("evaluation_answers").insert(answerRows);
-          if (answersInsert.error) throw answersInsert.error;
+          if (answersInsert.error) {
+            // 답변 저장 실패 시 방금 만든 응답을 되돌려 고아 레코드를 남기지 않는다
+            await supabase.from("evaluation_responses").delete().eq("id", responseId);
+            throw answersInsert.error;
+          }
         }
 
         processed += 1;
+       } catch (rowError: any) {
+        failed.push(`${i + 1}번째 줄: 저장 실패 - ${toSafeErrorMessage(rowError)}`);
+       }
       }
 
       await logAction(supabase, guard.admin, "bulk_import_responses", "evaluation_responses", null, {
         evaluationPeriodId,
         processed,
-        skipped: skipped.length
+        skipped: skipped.length,
+        failed: failed.length
       });
 
+      const responseSummary = [`등록 ${processed}건`];
+      if (skipped.length) responseSummary.push(`건너뜀/주의 ${skipped.length}건`);
+      if (failed.length) responseSummary.push(`저장 실패 ${failed.length}건`);
+
       return NextResponse.json({
-        ok: true,
+        ok: failed.length === 0,
         type,
         created: processed,
         updated: 0,
         skipped,
-        message: `설문 응답 벌크 업로드 완료: 등록 ${processed}건, 건너뜀/주의 ${skipped.length}건`
+        failed,
+        message: `설문 응답 벌크 업로드 ${failed.length ? "일부 실패(아래 실패 목록을 확인하고, 실패한 줄만 다시 업로드하세요)" : "완료"}: ${responseSummary.join(", ")}`
       });
     }
 
