@@ -4580,11 +4580,6 @@ export default function AdminPage() {
                             <option value="closed">마감</option>
                             <option value="archived">보관</option>
                           </select>
-                          <div style={{ marginTop: 8 }}>
-                            <span className={`badge ${draft.status === "open" ? "ok" : draft.status === "closed" ? "warn" : ""}`}>
-                              {statusLabels[draft.status] || draft.status}
-                            </span>
-                          </div>
                         </td>
                         <td>
                           {period.is_locked ? <span className="badge danger">잠금</span> : <span className="badge ok">수정 가능</span>}
@@ -4675,7 +4670,6 @@ export default function AdminPage() {
                             <button className="btn secondary sm" onClick={() => sendSlackTest(teacher.id)} disabled={slackBusy === `test-${teacher.id}`}>
                               {slackBusy === `test-${teacher.id}` ? "DM 발송 중..." : "테스트 DM"}
                             </button>
-                            <span className="sep" aria-hidden="true"></span>
                             <button className="btn danger sm" onClick={() => updateTeacher(teacher.id, { is_active: !draft.is_active })}>
                               {draft.is_active ? "비활성화" : "다시 사용"}
                             </button>

@@ -545,7 +545,7 @@ td .input, td .select {
   display: flex;
   align-items: center;
   gap: 6px;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 
 .row-actions .btn {
@@ -553,14 +553,7 @@ td .input, td .select {
   padding: 6px 12px;
   font-size: var(--fs-label);
   border-radius: 9px;
-}
-
-.row-actions .sep {
-  flex: none;
-  width: 1px;
-  height: 22px;
-  background: var(--line-strong);
-  margin: 0 3px;
+  white-space: nowrap;
 }
 
 .badge {
@@ -573,6 +566,7 @@ td .input, td .select {
   color: #374151;
   font-size: 13px;
   font-weight: 800;
+  white-space: nowrap;
 }
 
 .badge.ok {
