@@ -6970,8 +6970,22 @@ function TeacherReport({
   const recentPeriods = endIndex >= 0 ? sortedPeriods.slice(Math.max(0, endIndex - count + 1), endIndex + 1) : [];
   const recentPeriodIds = new Set(recentPeriods.map((p: any) => p.id));
 
-  // 선생님 전달용 리포트는 학생 개별 자유서술을 노출하지 않는다(문항 기준 평균/요약만).
-  // 과거 미사용 학생 코멘트 추출 로직은 개인정보 노출 방지를 위해 제거함.
+  // 선생님 전달용: 학생 이름·제출시각은 감추고, 선생님 수업 관련 서술형 코멘트는 익명으로 제공한다.
+  const teacherFreeComments = (responses || []).flatMap((response: any) => {
+    const clsName = displayClassName(response.evaluation_period_id, response.class_id, response.classes?.name || "");
+    return (response.evaluation_answers || [])
+      .filter((ans: any) => {
+        const code = ans.evaluation_questions?.code;
+        return String(ans.text_value || "").trim() && (code === "teacher_good_comment" || code === "teacher_bad_comment");
+      })
+      .map((ans: any) => ({
+        code: ans.evaluation_questions.code,
+        text: String(ans.text_value).trim(),
+        className: clsName
+      }));
+  });
+  const goodFreeComments = teacherFreeComments.filter((c: any) => c.code === "teacher_good_comment");
+  const badFreeComments = teacherFreeComments.filter((c: any) => c.code === "teacher_bad_comment");
 
   const activeMappings = (classMappings || []).filter((mapping: any) => mapping.is_active !== false && mapping.from_class_id && mapping.to_class_id);
   const bidirectionalMappings = activeMappings.filter((mapping: any) => (mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional")) !== "oneway");
@@ -7320,8 +7334,41 @@ function TeacherReport({
           })}
           {!classNamesForResponses.length && <Empty message="응답 데이터가 없습니다." />}
 
+          {(goodFreeComments.length > 0 || badFreeComments.length > 0) && (
+            <div className="report-response-section">
+              <div className="response-section-title">
+                <h2 className="h2">학생 서술형 코멘트 <span className="muted" style={{ fontSize: 15, fontWeight: 700 }}>(익명)</span></h2>
+                <span>{goodFreeComments.length + badFreeComments.length}건</span>
+              </div>
+              {goodFreeComments.length > 0 && (
+                <div style={{ marginTop: 10 }}>
+                  <b>선생님 수업에서 좋은 점</b>
+                  <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+                    {goodFreeComments.map((c: any, i: number) => (
+                      <div key={`good-${i}`} className="notice" style={{ padding: "10px 12px" }}>
+                        {c.className && <span className="muted small" style={{ marginRight: 6 }}>[{c.className}]</span>}{c.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {badFreeComments.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <b>선생님 수업에서 아쉬운 점</b>
+                  <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
+                    {badFreeComments.map((c: any, i: number) => (
+                      <div key={`bad-${i}`} className="notice" style={{ padding: "10px 12px" }}>
+                        {c.className && <span className="muted small" style={{ marginRight: 6 }}>[{c.className}]</span>}{c.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <p className="muted report-footnote">
-            선생님 전달용 리포트에는 개별 학생 응답과 서술형 원문을 표시하지 않습니다. 학생별 실명 응답 현황과 원문 코멘트는 원장 내부 확인용 리포트에서 확인합니다.
+            학생 이름과 제출 시각은 표시하지 않으며, 서술형 코멘트는 익명으로 제공합니다. 학생별 실명 응답 현황은 원장 내부 확인용 리포트에서 확인합니다.
           </p>
           <ReportFooter period={period} teacher={teacher} />
         </div>
