@@ -152,8 +152,12 @@ function nextMonth() {
 }
 
 function monthTitleFromYearMonth(yearMonth: string) {
-  const month = Number(String(yearMonth || "").split("-")[1]);
-  return Number.isFinite(month) && month > 0 ? `${month}월 강의평가` : "";
+  const [yearStr, monthStr] = String(yearMonth || "").split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  return Number.isFinite(month) && month > 0 && Number.isFinite(year) && year > 0
+    ? `${year}년 ${month}월 강의평가`
+    : "";
 }
 
 function makeMonthOptions(back = 3, forward = 18) {
@@ -4570,7 +4574,7 @@ export default function AdminPage() {
                   </select>
                 </Field>
                 <Field label="평가 이름">
-                  <input className="input" value={newPeriod.title} onChange={(e) => setNewPeriod({ ...newPeriod, title: e.target.value })} placeholder="7월 강의평가" />
+                  <input className="input" value={newPeriod.title} onChange={(e) => setNewPeriod({ ...newPeriod, title: e.target.value })} placeholder="2026년 7월 강의평가" />
                 </Field>
               </div>
               <div className="form-row">
