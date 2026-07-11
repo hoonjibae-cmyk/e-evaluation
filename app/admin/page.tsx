@@ -1649,6 +1649,9 @@ export default function AdminPage() {
   const [reportLinkStatusFilter, setReportLinkStatusFilter] = useState("all");
   const [backupPeriodId, setBackupPeriodId] = useState<string>("");
   const [backupBusy, setBackupBusy] = useState(false);
+  const [bulkImportBusy, setBulkImportBusy] = useState(false);
+  const [legacyUploadBusy, setLegacyUploadBusy] = useState(false);
+  const [withdrawalBusy, setWithdrawalBusy] = useState(false);
   const periodMonthOptions = useMemo(() => makeMonthOptions(12, 18), []);
 
 
@@ -1702,7 +1705,10 @@ export default function AdminPage() {
     || Boolean(slackBusy)
     || backupBusy
     || deleteBusy
-    || classExcelUploadBusy;
+    || classExcelUploadBusy
+    || bulkImportBusy
+    || legacyUploadBusy
+    || withdrawalBusy;
 
   const isInternalReportTemplate = reportTemplate === "internal";
 
@@ -2366,7 +2372,8 @@ export default function AdminPage() {
         throw new Error("붙여넣은 데이터가 없습니다.");
       }
 
-      setMessage("일괄 등록을 처리하는 중입니다.");
+      setBulkImportBusy(true);
+      setMessage("일괄 등록을 처리하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.");
       const body = await api("/api/admin/bulk-import", {
         method: "POST",
         body: JSON.stringify({
@@ -2381,6 +2388,8 @@ export default function AdminPage() {
       setMessage(body.message || "일괄 등록을 완료했습니다.");
     } catch (error: any) {
       setMessage(error.message);
+    } finally {
+      setBulkImportBusy(false);
     }
   }
 
@@ -2442,7 +2451,8 @@ export default function AdminPage() {
         if (!ok) return;
       }
 
-      setMessage("설문 응답 업로드를 확정하는 중입니다.");
+      setLegacyUploadBusy(true);
+      setMessage("설문 응답 업로드를 확정하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.");
       const body = await api("/api/admin/response-imports", {
         method: "POST",
         body: JSON.stringify({
@@ -2460,6 +2470,8 @@ export default function AdminPage() {
       setMessage(body.message || "설문 응답 업로드를 완료했습니다.");
     } catch (error: any) {
       setMessage(error.message);
+    } finally {
+      setLegacyUploadBusy(false);
     }
   }
 
@@ -2533,6 +2545,8 @@ export default function AdminPage() {
         teacher_id: teacherId,
         withdrawal_rate_percent: value === "" ? null : Number(value)
       }));
+      setWithdrawalBusy(true);
+      setMessage("퇴원율을 저장하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.");
       await api("/api/admin/withdrawal-rates", {
         method: "POST",
         body: JSON.stringify({ evaluationPeriodId: period.id, rows })
@@ -2541,6 +2555,8 @@ export default function AdminPage() {
       setMessage("퇴원율을 저장했습니다.");
     } catch (error: any) {
       setMessage(error.message);
+    } finally {
+      setWithdrawalBusy(false);
     }
   }
 
@@ -6712,8 +6728,6 @@ function TeacherReport({
   reportTemplate = "teacher"
 }: any) {
   const teacherQuestions = questions.filter((q: any) => q.category === "teacher" && q.question_type === "scale_5");
-  const goodCode = "teacher_good_comment";
-  const badCode = "teacher_bad_comment";
   const includePage = (key: string) => key === "coverPage" ? reportPages?.coverPage === true : reportPages?.[key] !== false;
   const isInternalReport = reportTemplate === "internal";
   const isSummaryReport = reportTemplate === "summary";
@@ -6728,19 +6742,8 @@ function TeacherReport({
   const recentPeriods = endIndex >= 0 ? sortedPeriods.slice(Math.max(0, endIndex - count + 1), endIndex + 1) : [];
   const recentPeriodIds = new Set(recentPeriods.map((p: any) => p.id));
 
-  const comments = responses.flatMap((response: any) => {
-    return (response.evaluation_answers || [])
-      .map((answer: any) => ({
-        responseId: response.id,
-        className: response.classes?.name || "반 미지정",
-        code: answer.evaluation_questions?.code,
-        text: answer.text_value
-      }))
-      .filter((x: any) => x.text);
-  });
-
-  const goodComments = comments.filter((c: any) => c.code === goodCode).map((c: any) => c.text);
-  const badComments = comments.filter((c: any) => c.code === badCode).map((c: any) => c.text);
+  // 선생님 전달용 리포트는 학생 개별 자유서술을 노출하지 않는다(문항 기준 평균/요약만).
+  // 과거 미사용 학생 코멘트 추출 로직은 개인정보 노출 방지를 위해 제거함.
 
   const activeMappings = (classMappings || []).filter((mapping: any) => mapping.is_active !== false && mapping.from_class_id && mapping.to_class_id);
   const bidirectionalMappings = activeMappings.filter((mapping: any) => (mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional")) !== "oneway");
