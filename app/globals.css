@@ -556,6 +556,11 @@ td .input, td .select {
   white-space: nowrap;
 }
 
+/* many/long-label actions may wrap, but stay compact and tidy */
+.row-actions.wrap {
+  flex-wrap: wrap;
+}
+
 .badge {
   display: inline-flex;
   align-items: center;

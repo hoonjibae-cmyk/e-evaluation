@@ -4782,8 +4782,8 @@ export default function AdminPage() {
                         <td><input className="input" value={draft.campus || ""} onChange={(e) => setClassDrafts((prev) => ({ ...prev, [classItem.id]: { ...draft, campus: e.target.value } }))} /></td>
                         <td>{draft.is_active ? <span className="badge ok">사용중</span> : <span className="badge">비활성</span>}</td>
                         <td>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            <button className="btn secondary" onClick={() => updateClassItem(classItem.id)}>저장</button>
+                          <div className="row-actions">
+                            <button className="btn soft" onClick={() => updateClassItem(classItem.id)}>저장</button>
                             <button className="btn danger" onClick={() => updateClassItem(classItem.id, { is_active: !draft.is_active })}>
                               {draft.is_active ? "비활성화" : "다시 사용"}
                             </button>
@@ -6384,7 +6384,7 @@ export default function AdminPage() {
                           <div className="muted small">{internalLink ? "선생님/직원 발송 차단" : (teacher.slack_email || "Slack 이메일 없음")}</div>
                         </td>
                         <td>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <div className="row-actions wrap">
                             <button className="btn secondary" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>웹 링크 열기</button>
                             {internalLink ? (
                               <button className="btn soft" onClick={() => sendInternalSlackReport(link)} disabled={slackBusy === `internal-${link.id}` || link.is_active === false}>
@@ -6570,7 +6570,7 @@ export default function AdminPage() {
                           {pages.monthCount ? <div className="muted">최근 {pages.monthCount}개월</div> : null}
                         </td>
                         <td>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          <div className="row-actions wrap">
                             {row.file_url ? (
                               <button className="btn secondary" onClick={() => openReportExport(row.id)}>{getReportExportOpenLabel(row)}</button>
                             ) : (
