@@ -4041,7 +4041,7 @@ export default function AdminPage() {
         map.set(key, {
           key,
           teacherName: link.teachers?.name || "-",
-          className: link.classes?.name || "반 미지정",
+          className: classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정",
           total: 0,
           flagged: 0,
           duplicate: 0,
@@ -5770,7 +5770,7 @@ export default function AdminPage() {
                     <h2 className="h2">e강의평가</h2>
                     <p className="muted">{link.evaluation_periods?.title}</p>
                     <h3 className="h3">{link.teachers?.name} 선생님</h3>
-                    <p><b>{link.classes?.name || "반 미지정"}</b></p>
+                    <p><b>{classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정"}</b></p>
                     {qrImages[link.id] ? <img className="qr-image" src={qrImages[link.id]} alt="QR 코드" /> : <div className="qr-image" />}
                     <div className="notice" style={{ marginTop: 14 }}>
                       <b>안내</b>
@@ -7449,12 +7449,20 @@ function InternalReport({
   metrics,
   periods,
   monthlyScores,
+  classDisplayNames,
   reportPages
 }: any) {
   const includePage = (key: string) => key === "coverPage" ? reportPages?.coverPage === true : reportPages?.[key] !== false;
   const teacherScaleQuestions = (questions || []).filter((q: any) => q.category === "teacher" && q.question_type === "scale_5");
   const nonTeacherScaleQuestions = (questions || []).filter((q: any) => q.category !== "teacher" && q.question_type === "scale_5");
   const pressureQuestion = (questions || []).find((q: any) => q.code === "pressure_or_reward");
+  const displayClassName = (teacherId: any, classId: any, fallback: string) => {
+    if (classId && period?.id && teacherId && classDisplayNames?.get) {
+      const hit = classDisplayNames.get(`${period.id}|${teacherId}|${classId}`);
+      if (hit) return hit;
+    }
+    return fallback;
+  };
 
   const responseList = responses || [];
   const teacherList = (teachers || []).filter((teacher: any) => teacher.is_active !== false);
@@ -7526,7 +7534,7 @@ function InternalReport({
       teacherId: response.teacher_id || "unassigned",
       studentName: response.student_name || "학생명 미입력",
       teacherName: response.teachers?.name || teacherMap.get(response.teacher_id)?.name || "선생님 미지정",
-      className: response.classes?.name || "반 미지정",
+      className: displayClassName(response.teacher_id, response.class_id, response.classes?.name || "반 미지정"),
       teacherScores,
       teacherAvg: average(teacherValues),
       commonAvg: average(commonValues),
@@ -7694,7 +7702,7 @@ function InternalReport({
   const textComments: any[] = [];
   for (const response of responseList) {
     const teacherName = response.teachers?.name || teacherMap.get(response.teacher_id)?.name || "선생님 미지정";
-    const className = response.classes?.name || "반 미지정";
+    const className = displayClassName(response.teacher_id, response.class_id, response.classes?.name || "반 미지정");
     for (const answer of response.evaluation_answers || []) {
       const text = String(answer.text_value || "").trim();
       if (!text) continue;

@@ -44,10 +44,25 @@ export async function GET(_request: NextRequest, { params }: { params: { token: 
 
     if (questionsRes.error) throw questionsRes.error;
 
+    // 이 평가월 배정에 설정된 표시 이름이 있으면 그것을 반 이름으로 사용
+    let className = qr.classes?.name || null;
+    if (qr.evaluation_period_id && qr.teacher_id && qr.class_id) {
+      const asgRes = await supabase
+        .from("teacher_class_assignments")
+        .select("class_display_name")
+        .eq("evaluation_period_id", qr.evaluation_period_id)
+        .eq("teacher_id", qr.teacher_id)
+        .eq("class_id", qr.class_id)
+        .maybeSingle();
+      if (!asgRes.error && asgRes.data?.class_display_name) {
+        className = asgRes.data.class_display_name;
+      }
+    }
+
     return NextResponse.json({
       qr: { id: qr.id, token: qr.token },
       teacher: qr.teachers,
-      classItem: qr.classes,
+      classItem: qr.classes ? { ...qr.classes, name: className } : qr.classes,
       period: qr.evaluation_periods,
       questions: questionsRes.data || []
     });
