@@ -1672,6 +1672,10 @@ export default function AdminPage() {
   const [bulkImportBusy, setBulkImportBusy] = useState(false);
   const [legacyUploadBusy, setLegacyUploadBusy] = useState(false);
   const [withdrawalBusy, setWithdrawalBusy] = useState(false);
+  const [assignmentSetupBusy, setAssignmentSetupBusy] = useState(false);
+  const [classNameDrafts, setClassNameDrafts] = useState<Record<string, string>>({});
+  const [addPairTeacherId, setAddPairTeacherId] = useState<string>("");
+  const [addPairClassName, setAddPairClassName] = useState<string>("");
   const periodMonthOptions = useMemo(() => makeMonthOptions(12, 18), []);
 
 
@@ -1728,7 +1732,8 @@ export default function AdminPage() {
     || classExcelUploadBusy
     || bulkImportBusy
     || legacyUploadBusy
-    || withdrawalBusy;
+    || withdrawalBusy
+    || assignmentSetupBusy;
 
   const isInternalReportTemplate = reportTemplate === "internal";
 
@@ -2379,6 +2384,88 @@ export default function AdminPage() {
         ? `${assignmentDefaults.sourcePeriod.title} 배정을 불러왔습니다. 저장해야 이번 평가월에 반영됩니다.`
         : "불러올 이전 평가월 배정이 없습니다."
     );
+  }
+
+  async function cloneAssignmentsForPeriod() {
+    const periodId = selectedAssignmentPeriod?.id || assignmentForm.evaluation_period_id;
+    if (!periodId) {
+      setMessage("평가월을 먼저 선택해주세요.");
+      return;
+    }
+    try {
+      setAssignmentSetupBusy(true);
+      setMessage("최근 달 배정을 이 평가월로 복제하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.");
+      const body = await api("/api/admin/assignments/setup", {
+        method: "POST",
+        body: JSON.stringify({ action: "clone", target_period_id: periodId })
+      });
+      await loadData();
+      setMessage(body.message || "배정을 복제했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setAssignmentSetupBusy(false);
+    }
+  }
+
+  async function renameAssignmentClass(assignment: any) {
+    const current = assignment.class_display_name || assignment.classes?.name || "";
+    const nextName = String(classNameDrafts[assignment.id] ?? current).trim();
+    try {
+      setAssignmentSetupBusy(true);
+      setMessage("반 이름을 저장하는 중입니다...");
+      await api("/api/admin/assignments", {
+        method: "PATCH",
+        body: JSON.stringify({ id: assignment.id, class_display_name: nextName || null })
+      });
+      setClassNameDrafts((prev) => {
+        const copy = { ...prev };
+        delete copy[assignment.id];
+        return copy;
+      });
+      await loadData();
+      setMessage("이번 평가월의 반 이름을 저장했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setAssignmentSetupBusy(false);
+    }
+  }
+
+  async function addAssignmentPair() {
+    const periodId = selectedAssignmentPeriod?.id || assignmentForm.evaluation_period_id;
+    if (!periodId) {
+      setMessage("평가월을 먼저 선택해주세요.");
+      return;
+    }
+    if (!addPairTeacherId) {
+      setMessage("추가할 선생님을 선택해주세요.");
+      return;
+    }
+    if (!addPairClassName.trim()) {
+      setMessage("추가할 반 이름을 입력해주세요.");
+      return;
+    }
+    try {
+      setAssignmentSetupBusy(true);
+      setMessage("선생님-반을 추가하는 중입니다...");
+      await api("/api/admin/assignments/setup", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "add",
+          target_period_id: periodId,
+          teacher_id: addPairTeacherId,
+          class_name: addPairClassName.trim()
+        })
+      });
+      setAddPairClassName("");
+      await loadData();
+      setMessage("선생님-반을 추가했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setAssignmentSetupBusy(false);
+    }
   }
 
   async function runBulkImport() {
@@ -3848,6 +3935,17 @@ export default function AdminPage() {
     return (data?.assignments || []).filter((a: any) => !periodId || a.evaluation_period_id === periodId);
   }, [data, selectedAssignmentPeriod]);
 
+  const periodSetupAssignments = useMemo(() => {
+    const periodId = selectedAssignmentPeriod?.id;
+    if (!periodId) return [] as any[];
+    return (data?.assignments || [])
+      .filter((a: any) => a.is_active !== false && a.evaluation_period_id === periodId)
+      .sort((a: any, b: any) =>
+        String(a.teachers?.name || "").localeCompare(String(b.teachers?.name || ""), "ko") ||
+        String(a.class_display_name || a.classes?.name || "").localeCompare(String(b.class_display_name || b.classes?.name || ""), "ko")
+      );
+  }, [data, selectedAssignmentPeriod]);
+
   const displayedQrLinks = useMemo(() => {
     const periodId = selectedQrPeriod?.id;
     return (data?.qrLinks || []).filter((link: any) => !periodId || link.evaluation_period_id === periodId);
@@ -4910,6 +5008,83 @@ export default function AdminPage() {
               평가월과 선생님을 선택하면, 해당 평가월에 저장된 배정이 있으면 그 값을 먼저 보여주고,
               저장된 값이 없으면 가장 최근 이전 평가월의 배정을 기본값으로 불러옵니다.
             </p>
+
+            {/* 평가월 배정 세팅: 최근 달 전체 복제 + 인라인 편집(이름 변경/추가/제거) */}
+            <div className="card" style={{ marginTop: 18 }}>
+              <h2 className="h2">평가월 배정 세팅 (전체 복제 + 편집)</h2>
+              <p className="muted small">
+                최근 달의 선생님-반 배정을 통째로 불러온 뒤, 반 이름을 이번 달만 바꾸거나 반을 추가·제거해
+                이 평가월을 세팅합니다. 같은 반은 그대로 이어지고 표시 이름만 달라져 리포트 추이가 끊기지 않습니다.
+              </p>
+              <div className="btn-row" style={{ marginTop: 12 }}>
+                <select
+                  className="select"
+                  value={selectedAssignmentPeriod?.id || ""}
+                  onChange={(e) => {
+                    setSelectedAssignmentPeriodId(e.target.value);
+                    setAssignmentForm({ ...assignmentForm, evaluation_period_id: e.target.value });
+                  }}
+                >
+                  {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
+                </select>
+                <button className="btn" type="button" disabled={assignmentSetupBusy} onClick={cloneAssignmentsForPeriod}>
+                  {assignmentSetupBusy ? "처리 중..." : "최근 달 배정 전체 복제"}
+                </button>
+              </div>
+
+              {!periodSetupAssignments.length && (
+                <p className="muted small" style={{ marginTop: 10 }}>
+                  이 평가월에 배정이 없습니다. "최근 달 배정 전체 복제"를 누르거나 아래 표에서 추가하세요.
+                </p>
+              )}
+
+              <div className="table-wrap" style={{ marginTop: 14 }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>선생님</th>
+                      <th>반 표시 이름 (이번 평가월)</th>
+                      <th>기능</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {periodSetupAssignments.map((a: any) => (
+                      <tr key={a.id}>
+                        <td>{a.teachers?.name} 선생님</td>
+                        <td>
+                          <input
+                            className="input"
+                            value={classNameDrafts[a.id] ?? (a.class_display_name || a.classes?.name || "")}
+                            onChange={(e) => setClassNameDrafts((prev) => ({ ...prev, [a.id]: e.target.value }))}
+                            placeholder="반 표시 이름"
+                          />
+                        </td>
+                        <td>
+                          <div className="row-actions">
+                            <button className="btn soft sm" onClick={() => renameAssignmentClass(a)} disabled={assignmentSetupBusy}>이름 저장</button>
+                            <button className="btn danger sm" onClick={() => toggleAssignment(a)} disabled={assignmentSetupBusy}>제거</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    <tr>
+                      <td>
+                        <select className="select" value={addPairTeacherId} onChange={(e) => setAddPairTeacherId(e.target.value)}>
+                          <option value="">선생님 선택</option>
+                          {activeTeachers.map((teacher: any) => <option key={teacher.id} value={teacher.id}>{teacher.name} 선생님</option>)}
+                        </select>
+                      </td>
+                      <td>
+                        <input className="input" value={addPairClassName} onChange={(e) => setAddPairClassName(e.target.value)} placeholder="추가할 반 이름" />
+                      </td>
+                      <td>
+                        <button className="btn sm" type="button" onClick={addAssignmentPair} disabled={assignmentSetupBusy}>추가</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="h2">선생님별 반 복수 배정</h2>

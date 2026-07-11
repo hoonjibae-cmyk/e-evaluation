@@ -133,6 +133,11 @@ export async function PATCH(request: NextRequest) {
       updatePayload.is_active = Boolean(body.is_active);
     }
 
+    // 평가월별 반 표시 이름 (null/빈값이면 전역 반 이름으로 되돌림)
+    if (body.class_display_name !== undefined) {
+      updatePayload.class_display_name = cleanText(body.class_display_name);
+    }
+
     const res = await supabase
       .from("teacher_class_assignments")
       .update(updatePayload)
