@@ -3946,6 +3946,17 @@ export default function AdminPage() {
       );
   }, [data, selectedAssignmentPeriod]);
 
+  // (평가월 + 선생님 + 반) → 그 달의 반 표시 이름. 리포트/QR에서 라벨로 사용.
+  const classDisplayNames = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const a of (data?.assignments || [])) {
+      if (a.class_display_name) {
+        map.set(`${a.evaluation_period_id}|${a.teacher_id}|${a.class_id}`, String(a.class_display_name));
+      }
+    }
+    return map;
+  }, [data]);
+
   const displayedQrLinks = useMemo(() => {
     const periodId = selectedQrPeriod?.id;
     return (data?.qrLinks || []).filter((link: any) => !periodId || link.evaluation_period_id === periodId);
@@ -6463,6 +6474,7 @@ export default function AdminPage() {
                       periods={data?.periods || []}
                       monthlyScores={data?.monthlyScores || []}
                       reportPages={reportPages}
+                      classDisplayNames={classDisplayNames}
                       reportTemplate={reportTemplate}
                     />
                   </div>
@@ -6486,6 +6498,7 @@ export default function AdminPage() {
                         questions={data?.questions || []}
                         classes={data?.classes || []}
                         classMappings={getScopedReportClassMappings(teacher.id)}
+                        classDisplayNames={classDisplayNames}
                         reportPages={reportPages}
                         monthCount={reportMonthCount}
                         reportTemplate={reportTemplate}
@@ -6930,11 +6943,19 @@ function TeacherReport({
   questions,
   classes,
   classMappings,
+  classDisplayNames,
   reportPages,
   monthCount,
   reportTemplate = "teacher"
 }: any) {
   const teacherQuestions = questions.filter((q: any) => q.category === "teacher" && q.question_type === "scale_5");
+  const displayClassName = (periodId: any, classId: any, fallback: string) => {
+    if (classId && periodId && classDisplayNames?.get) {
+      const hit = classDisplayNames.get(`${periodId}|${teacher.id}|${classId}`);
+      if (hit) return hit;
+    }
+    return fallback;
+  };
   const includePage = (key: string) => key === "coverPage" ? reportPages?.coverPage === true : reportPages?.[key] !== false;
   const isInternalReport = reportTemplate === "internal";
   const isSummaryReport = reportTemplate === "summary";
@@ -7197,6 +7218,9 @@ function TeacherReport({
                 {classNamesForScores.map((className: any) => {
                   const classValues = recentPeriods.map((p: any) => scoreFor(className, p.id)).filter((value: any) => value !== null) as number[];
                   const classAvg = average(classValues);
+                  const groupRow = scoreRows.find((r: any) => (r.canonical_class_name || "반 미지정") === className && r.evaluation_period_id === period?.id)
+                    || scoreRows.find((r: any) => (r.canonical_class_name || "반 미지정") === className);
+                  const groupHeaderName = displayClassName(period?.id, groupRow?.class_id, className);
                   return (
                     <div className="trend-group" key={className}>
                       <div className="trend-bars">
@@ -7204,6 +7228,8 @@ function TeacherReport({
                           const value = scoreFor(className, p.id);
                           const visualValue = value === null ? null : Math.max(50, Math.min(100, Number(value)));
                           const barHeight = visualValue === null ? 0 : Math.max(4, ((visualValue - 50) / 50) * 100);
+                          const monthRow = scoreRows.find((r: any) => (r.canonical_class_name || "반 미지정") === className && r.evaluation_period_id === p.id);
+                          const monthName = displayClassName(p.id, monthRow?.class_id, className);
                           return (
                             <div className="trend-bar-column" key={p.id}>
                               <div className="trend-value">{visualValue === null ? "-" : formatScore(visualValue)}</div>
@@ -7217,11 +7243,14 @@ function TeacherReport({
                                 />
                               </div>
                               <div className="trend-month">{monthLabel(p.year_month)}</div>
+                              {monthName !== groupHeaderName && (
+                                <div style={{ marginTop: 2, fontSize: 10, fontWeight: 800, color: "#475569", lineHeight: 1.15, wordBreak: "keep-all" }}>{monthName}</div>
+                              )}
                             </div>
                           );
                         })}
                       </div>
-                      <div className="trend-class-name">{className}</div>
+                      <div className="trend-class-name">{groupHeaderName}</div>
                       <div className="trend-class-average">평균 {classAvg === null ? "-" : formatScore(classAvg)}점</div>
                     </div>
                   );
@@ -7255,10 +7284,11 @@ function TeacherReport({
 
           {classNamesForResponses.map((className: any) => {
             const classResponses = responsesWithClassGroup.filter((r: any) => (r.canonical_class_name || "반 미지정") === className);
+            const respDisplayName = displayClassName(period?.id, classResponses[0]?.class_id, className);
             return (
               <div key={className} className="report-response-section">
                 <div className="response-section-title">
-                  <h2 className="h2">Class: {className}</h2>
+                  <h2 className="h2">Class: {respDisplayName}</h2>
                   <span>{classResponses.length}건 응답</span>
                 </div>
                 <div className="table-wrap report-table-wrap">
