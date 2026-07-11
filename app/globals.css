@@ -3592,6 +3592,26 @@ button:disabled {
     grid-template-columns: 1fr !important;
   }
 
+  /* 모바일: 표지 KPI 카드가 버튼처럼 너무 커 보이던 문제 → 2열 + 촘촘하게 */
+  .report-output .cover-kpis,
+  .teacher-report .cover-kpis,
+  .web-report-output .cover-kpis {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 10px !important;
+  }
+  .report-cover-page .report-kpi {
+    padding: 12px !important;
+  }
+  .report-cover-page .report-kpi b {
+    font-size: 20px !important;
+    margin-top: 2px !important;
+  }
+  .report-cover-page .report-kpi span,
+  .report-cover-page .report-kpi small {
+    font-size: 11px !important;
+    line-height: 1.4 !important;
+  }
+
   .report-output .trend-legend-stack,
   .teacher-report .trend-legend-stack,
   .web-report-output .trend-legend-stack {

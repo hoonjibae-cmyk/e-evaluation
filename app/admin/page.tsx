@@ -1365,6 +1365,22 @@ function webReportSnapshotCss() {
         grid-template-columns: 1fr !important;
       }
 
+      /* 표지 KPI 카드: 모바일에서 2열·촘촘하게 (버튼처럼 커 보이던 문제) */
+      .web-report-output .cover-kpis {
+        grid-template-columns: 1fr 1fr !important;
+        gap: 10px !important;
+      }
+      .web-report-output .report-cover-page .report-kpi {
+        padding: 12px !important;
+      }
+      .web-report-output .report-cover-page .report-kpi b {
+        font-size: 20px !important;
+      }
+      .web-report-output .report-cover-page .report-kpi span,
+      .web-report-output .report-cover-page .report-kpi small {
+        font-size: 11px !important;
+      }
+
       .web-report-output .report-kpi {
         padding: 14px !important;
         border-radius: 16px !important;
@@ -7069,7 +7085,6 @@ function TeacherReport({
                         <th>No.</th>
                         <th>평가 내용</th>
                         <th>{monthLabel(period?.year_month)} AVG</th>
-                        <th>응답 수</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -7081,7 +7096,6 @@ function TeacherReport({
                             <td>{qIndex + 1}</td>
                             <td>{q.title.replace("{teacher_name}", teacher.name)}</td>
                             <td><b>{avg === null ? "-" : formatScore(avg)}</b></td>
-                            <td>{allScores.length}건</td>
                           </tr>
                         );
                       })}
