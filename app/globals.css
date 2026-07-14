@@ -976,6 +976,30 @@ td .input, td .select {
     height: 168px;
   }
 
+  /* 선생님별/반별 출력: 한 A4 페이지에 담기게 3열 컴팩트 배치 */
+  .qr-grid.qr-fit-page .qr-card {
+    width: 31%;
+    padding: 9px;
+    border-radius: 10px;
+  }
+  .qr-grid.qr-fit-page .qr-card .qr-image {
+    width: 116px;
+    height: 116px;
+    padding: 5px;
+  }
+  .qr-grid.qr-fit-page .qr-card h3 {
+    font-size: 11pt;
+    margin: 4px 0 0;
+  }
+  .qr-grid.qr-fit-page .qr-card .qr-guide {
+    font-size: 7.5pt;
+    padding: 7px 8px;
+    margin-top: 8px;
+  }
+  .qr-grid.qr-fit-page .qr-card .qr-url {
+    display: none;
+  }
+
   .report-page {
     width: 100%;
     min-height: 0;

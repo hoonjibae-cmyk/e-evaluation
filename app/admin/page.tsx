@@ -1637,6 +1637,7 @@ export default function AdminPage() {
   const [selectedQrPeriodId, setSelectedQrPeriodId] = useState<string>("");
   const [qrTeacherFilter, setQrTeacherFilter] = useState<string>("all");
   const [qrClassFilter, setQrClassFilter] = useState<string>("all");
+  const [qrFitPage, setQrFitPage] = useState<boolean>(false);
   const [selectedAssignmentPeriodId, setSelectedAssignmentPeriodId] = useState<string>("");
   const [selectedHomePeriodId, setSelectedHomePeriodId] = useState<string>("");
   const [selectedSafetyPeriodId, setSelectedSafetyPeriodId] = useState<string>("");
@@ -4047,6 +4048,33 @@ export default function AdminPage() {
     };
   }, [data, selectedQrPeriod, qrTeacherFilter, classDisplayNames]);
 
+  // QR 출력: 전체 / 선생님별(1페이지) / 반별(1페이지)
+  function printQr(scope: "all" | "teacher" | "class") {
+    if (scope === "teacher" && qrTeacherFilter === "all") {
+      setMessage("먼저 위에서 선생님을 선택한 뒤 '선생님별 출력'을 눌러주세요.");
+      return;
+    }
+    if (scope === "class" && qrClassFilter === "all") {
+      setMessage("먼저 위에서 반을 선택한 뒤 '반별 출력'을 눌러주세요.");
+      return;
+    }
+    if (scope === "all") {
+      setQrTeacherFilter("all");
+      setQrClassFilter("all");
+      setQrFitPage(false);
+    } else if (scope === "teacher") {
+      setQrClassFilter("all");
+      setQrFitPage(true);
+    } else {
+      setQrFitPage(true);
+    }
+    // 필터/레이아웃이 반영된 뒤 인쇄
+    window.setTimeout(() => {
+      window.print();
+      window.setTimeout(() => setQrFitPage(false), 300);
+    }, 120);
+  }
+
   const periodResponses = useMemo(() => {
     const periodId = selectedReportPeriod?.id || currentPeriod?.id;
     return visibleResponses.filter((r: any) => !periodId || r.evaluation_period_id === periodId);
@@ -5838,24 +5866,30 @@ export default function AdminPage() {
                 <h1 className="h1">QR 출력</h1>
                 <p className="muted">선생님·반별 QR을 출력해 교실에서 나눠주면 됩니다.</p>
               </div>
-              <div className="btn-row">
-                <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => { setSelectedQrPeriodId(e.target.value); setQrTeacherFilter("all"); setQrClassFilter("all"); }}>
-                  {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
-                </select>
-                <select className="select" value={qrTeacherFilter} onChange={(e) => { setQrTeacherFilter(e.target.value); setQrClassFilter("all"); }}>
-                  <option value="all">전체 선생님</option>
-                  {qrFilterOptions.teachers.map((t: any) => <option key={t.id} value={t.id}>{t.name} 선생님</option>)}
-                </select>
-                <select className="select" value={qrClassFilter} onChange={(e) => setQrClassFilter(e.target.value)}>
-                  <option value="all">전체 반</option>
-                  {qrFilterOptions.classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-                <button className="btn secondary" onClick={() => generateQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>{qrBusy ? "QR 생성 중..." : "QR 전체 생성"}</button>
-                <button className="btn" onClick={() => window.print()}>선택 QR 인쇄 ({displayedQrLinks.length}장)</button>
+              <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}>
+                <div className="btn-row">
+                  <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => { setSelectedQrPeriodId(e.target.value); setQrTeacherFilter("all"); setQrClassFilter("all"); }}>
+                    {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
+                  </select>
+                  <select className="select" value={qrTeacherFilter} onChange={(e) => { setQrTeacherFilter(e.target.value); setQrClassFilter("all"); }}>
+                    <option value="all">전체 선생님</option>
+                    {qrFilterOptions.teachers.map((t: any) => <option key={t.id} value={t.id}>{t.name} 선생님</option>)}
+                  </select>
+                  <select className="select" value={qrClassFilter} onChange={(e) => setQrClassFilter(e.target.value)}>
+                    <option value="all">전체 반</option>
+                    {qrFilterOptions.classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div className="btn-row">
+                  <button className="btn secondary" onClick={() => generateQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>{qrBusy ? "QR 생성 중..." : "QR 전체 생성"}</button>
+                  <button className="btn" onClick={() => printQr("all")}>전체 출력</button>
+                  <button className="btn soft" onClick={() => printQr("teacher")}>선생님별 출력 (1페이지)</button>
+                  <button className="btn soft" onClick={() => printQr("class")}>반별 출력 (1페이지)</button>
+                </div>
               </div>
             </div>
 
-            <div className="grid grid-2 qr-grid" style={{ marginTop: 18 }}>
+            <div className={`grid grid-2 qr-grid${qrFitPage ? " qr-fit-page" : ""}`} style={{ marginTop: 18 }}>
               {displayedQrLinks.map((link: any) => {
                 const url = `${appUrl}/s/${link.token}`;
                 const qrClassName = classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정";
@@ -5875,7 +5909,7 @@ export default function AdminPage() {
                       <br />3. 수업을 솔직하고 성실하게 평가해주세요. (응답은 익명으로 처리됩니다)
                       <br />4. 제출 완료 화면을 선생님께 보여주세요.
                     </div>
-                    <p className="muted" style={{ wordBreak: "break-all" }}>{url}</p>
+                    <p className="muted qr-url" style={{ wordBreak: "break-all" }}>{url}</p>
                     <a className="btn secondary no-print" href={url} target="_blank">설문 링크 열기</a>
                   </div>
                 );
