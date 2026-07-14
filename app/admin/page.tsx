@@ -197,7 +197,7 @@ function defaultPeriodForm() {
     title: monthTitleFromYearMonth(ym),
     start_date: "",
     end_date: "",
-    status: "draft",
+    status: "open",
     is_active: true
   };
 }
@@ -1906,7 +1906,7 @@ export default function AdminPage() {
         title: period.title || "",
         start_date: period.start_date || "",
         end_date: period.end_date || "",
-        status: period.status || "draft",
+        status: period.status || "open",
         is_active: period.is_active !== false
       };
     }
@@ -4947,11 +4947,13 @@ export default function AdminPage() {
               <div className="form-row">
                 <label className="label">상태</label>
                 <select className="select" value={newPeriod.status} onChange={(e) => setNewPeriod({ ...newPeriod, status: e.target.value })}>
-                  <option value="draft">준비중</option>
                   <option value="open">진행중</option>
                   <option value="closed">마감</option>
                   <option value="archived">보관</option>
                 </select>
+                <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                  QR 응답은 상태가 <b>진행중</b>일 때만 열립니다. 기본값은 진행중이며, 만들자마자 바로 응답을 받을 수 있습니다.
+                </p>
               </div>
               <div className="form-row">
                 <button className="btn" onClick={createPeriod}>평가월 만들기</button>
@@ -4977,8 +4979,8 @@ export default function AdminPage() {
                         <td><input className="input" disabled={period.is_locked} value={draft.year_month || ""} onChange={(e) => setPeriodDrafts((prev) => ({ ...prev, [period.id]: { ...draft, year_month: e.target.value } }))} /></td>
                         <td><input className="input" disabled={period.is_locked} value={draft.title || ""} onChange={(e) => setPeriodDrafts((prev) => ({ ...prev, [period.id]: { ...draft, title: e.target.value } }))} /></td>
                         <td>
-                          <select className="select" disabled={period.is_locked} value={draft.status || "draft"} onChange={(e) => setPeriodDrafts((prev) => ({ ...prev, [period.id]: { ...draft, status: e.target.value } }))}>
-                            <option value="draft">준비중</option>
+                          <select className="select" disabled={period.is_locked} value={draft.status || "open"} onChange={(e) => setPeriodDrafts((prev) => ({ ...prev, [period.id]: { ...draft, status: e.target.value } }))}>
+                            {draft.status === "draft" && <option value="draft">준비중(이전)</option>}
                             <option value="open">진행중</option>
                             <option value="closed">마감</option>
                             <option value="archived">보관</option>

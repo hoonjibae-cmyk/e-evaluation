@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const year_month = cleanText(body.year_month);
     const title = cleanText(body.title);
-    const status = cleanText(body.status) || "draft";
+    const status = cleanText(body.status) || "open";
 
     if (!year_month) {
       return NextResponse.json({ error: "평가월을 입력해주세요. 예: 2026-07" }, { status: 400 });
@@ -94,7 +94,7 @@ export async function PATCH(request: NextRequest) {
     const id = cleanText(body.id);
     const year_month = cleanText(body.year_month);
     const title = cleanText(body.title);
-    const status = cleanText(body.status) || "draft";
+    const status = cleanText(body.status) || "open";
 
     if (!id) {
       return NextResponse.json({ error: "수정할 평가월 ID가 없습니다." }, { status: 400 });
