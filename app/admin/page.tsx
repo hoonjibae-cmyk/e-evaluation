@@ -7030,13 +7030,35 @@ function TeacherReport({
     const toClassId = bidirectionalCanonicalClassId(mapping.to_class_id);
     if (fromClassId && toClassId && fromClassId !== toClassId) oneWayClassMap.set(fromClassId, toClassId);
   }
-  // 반 이름 매칭 기능 제거: 매칭 합산 없이 각 반을 그대로 사용(항등).
-  // (평가월별 표시 이름으로 대체됨)
-  const canonicalClassId = (classId: any) => classId || "";
-  const canonicalClassName = (_classId: any, fallback: string) => fallback || "반 미지정";
+  const canonicalClassId = (classId: any) => {
+    let current = bidirectionalCanonicalClassId(classId);
+    if (!current) return "";
+    const visited = new Set<string>();
+    for (let index = 0; index < 10; index += 1) {
+      if (visited.has(current)) break;
+      visited.add(current);
+      const next = oneWayClassMap.get(current);
+      if (!next || next === current) break;
+      current = bidirectionalCanonicalClassId(next);
+    }
+    return current;
+  };
+  const canonicalClassName = (classId: any, fallback: string) => {
+    const id = canonicalClassId(classId);
+    return classById.get(id)?.name || fallback || "반 미지정";
+  };
 
-  // 반 이름 매칭 제거로 범례 미표시
-  const classMappingLegendItems: any[] = [];
+  const classMappingLegendItems = activeMappings.map((mapping: any) => {
+    const fromName = classById.get(String(mapping.from_class_id || ""))?.name || "이전반";
+    const toName = classById.get(String(mapping.to_class_id || ""))?.name || "기준반";
+    const directionMode = mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional");
+    const isBidirectional = directionMode !== "oneway";
+    return {
+      id: mapping.id || `${mapping.from_class_id}-${mapping.to_class_id}-${directionMode}`,
+      label: `${fromName} ${isBidirectional ? "↔" : "→"} ${toName}`,
+      modeLabel: isBidirectional ? "양방향" : "단방향"
+    };
+  });
 
   const scoreRows = (classScores || [])
     .filter((row: any) => recentPeriodIds.has(row.evaluation_period_id))
@@ -7180,7 +7202,7 @@ function TeacherReport({
               <div className="trend-card-head">
                 <div>
                   <h2 className="h2">반별 점수 흐름</h2>
-                  <p className="muted">같은 반은 이름이 바뀌어도 한 줄로 이어지며, 각 달의 반 표시 이름으로 라벨링됩니다.</p>
+                  <p className="muted">선생님 전체 월 리포트용 반 이름 매칭을 설정한 경우 선택한 방식에 따라 해당 선생님의 모든 월 리포트에서 반 이름을 합산합니다.</p>
                 </div>
                 <div className="trend-legend-stack">
                   <div className="trend-legend">
