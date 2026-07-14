@@ -5895,9 +5895,9 @@ export default function AdminPage() {
                 const qrClassName = classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정";
                 return (
                   <div className="qr-card" key={link.id}>
-                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                    <div className="qr-card-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
                       <b className="qr-academy">목동유쌤영어학원</b>
-                      <span className="muted small">e강의평가 · {link.evaluation_periods?.title}</span>
+                      <span className="muted small qr-subtitle">e강의평가 · {link.evaluation_periods?.title}</span>
                     </div>
                     <h3 className="h3" style={{ marginTop: 8 }}>{link.teachers?.name} 선생님</h3>
                     <p><b>{qrClassName}</b></p>
