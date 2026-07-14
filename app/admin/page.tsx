@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { formatScore, maskTeacherName, monthLabel } from "@/lib/score";
 
@@ -149,6 +149,23 @@ function nextMonth() {
   const now = new Date();
   now.setMonth(now.getMonth() + 1);
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function addMonthToYearMonth(yearMonth: string) {
+  const [yearStr, monthStr] = String(yearMonth || "").split("-");
+  const year = Number(yearStr);
+  const month = Number(monthStr);
+  if (!Number.isFinite(year) || !Number.isFinite(month) || month < 1) return "";
+  const d = new Date(year, month - 1, 1);
+  d.setMonth(d.getMonth() + 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function latestPeriodYearMonth(periods: any[]) {
+  return (periods || []).reduce((latest: string, p: any) => {
+    const ym = String(p?.year_month || "");
+    return ym > latest ? ym : latest;
+  }, "");
 }
 
 function monthTitleFromYearMonth(yearMonth: string) {
@@ -1684,6 +1701,22 @@ export default function AdminPage() {
 
 
   const [newPeriod, setNewPeriod] = useState<any>(defaultPeriodForm());
+  const periodYearOptions = useMemo(() => {
+    const base = new Date().getFullYear();
+    const set = new Set<number>();
+    for (let y = base - 1; y <= base + 2; y += 1) set.add(y);
+    const selected = Number(String(newPeriod?.year_month || "").split("-")[0]);
+    if (Number.isFinite(selected) && selected > 0) set.add(selected);
+    return Array.from(set).sort((a, b) => a - b);
+  }, [newPeriod?.year_month]);
+  const newPeriodYear = String(newPeriod?.year_month || "").split("-")[0] || "";
+  const newPeriodMonth = String(newPeriod?.year_month || "").split("-")[1] || "";
+  const periodDefaultInitRef = useRef(false);
+
+  function setNewPeriodYearMonth(yearMonth: string) {
+    setNewPeriod((prev: any) => ({ ...prev, year_month: yearMonth, title: monthTitleFromYearMonth(yearMonth) }));
+  }
+
   const [periodDrafts, setPeriodDrafts] = useState<Record<string, any>>({});
   const [newTeacher, setNewTeacher] = useState<any>(emptyTeacherForm);
   const [teacherDrafts, setTeacherDrafts] = useState<Record<string, any>>({});
@@ -1770,6 +1803,18 @@ export default function AdminPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionToken]);
+
+  // 새 평가월 기본값: 마지막으로 만든 평가월의 다음 달로 세팅 (최초 데이터 로드 시 1회)
+  useEffect(() => {
+    if (periodDefaultInitRef.current) return;
+    const periods = data?.periods || [];
+    if (!periods.length) return;
+    const latest = latestPeriodYearMonth(periods);
+    const nextYM = addMonthToYearMonth(latest);
+    if (nextYM) setNewPeriodYearMonth(nextYM);
+    periodDefaultInitRef.current = true;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data?.periods]);
 
   useEffect(() => {
     try {
@@ -2075,11 +2120,14 @@ export default function AdminPage() {
   async function createPeriod() {
     try {
       setMessage("평가월을 만드는 중입니다.");
+      const createdYearMonth = newPeriod.year_month;
       await api("/api/admin/evaluation-periods", {
         method: "POST",
         body: JSON.stringify(newPeriod)
       });
-      setNewPeriod(defaultPeriodForm());
+      // 다음 기본값: 방금 만든 평가월의 다음 달
+      const nextYM = addMonthToYearMonth(createdYearMonth) || defaultPeriodForm().year_month;
+      setNewPeriod({ ...defaultPeriodForm(), year_month: nextYM, title: monthTitleFromYearMonth(nextYM) });
       await loadData();
       setMessage("평가월을 만들었습니다.");
     } catch (error: any) {
@@ -2098,6 +2146,51 @@ export default function AdminPage() {
       setMessage("평가월을 저장했습니다.");
     } catch (error: any) {
       setMessage(error.message);
+    }
+  }
+
+  async function deletePeriod(period: any) {
+    if (period?.is_locked) {
+      setMessage(`${period.title}은(는) 운영 안전 잠금 상태입니다. 잠금 해제 후 삭제할 수 있습니다.`);
+      return;
+    }
+
+    // 이미 입력된 데이터(응답/업로드) 여부 확인 — 있으면 강한 경고 후 이중 확인
+    const responseCount = (data?.responses || []).filter((r: any) => r.evaluation_period_id === period.id).length;
+    const batchCount = (data?.responseImportBatches || []).filter((b: any) => b.evaluation_period_id === period.id).length;
+    const hasData = responseCount > 0 || batchCount > 0;
+
+    if (hasData) {
+      const warn = window.confirm(
+        `⚠️ 주의: '${period.title}'에는 이미 입력된 데이터가 있습니다.\n\n` +
+          `· 제출된 응답 ${responseCount}건\n` +
+          `· 업로드 이력 ${batchCount}건\n\n` +
+          `삭제하면 이 평가월의 응답·업로드·QR·반배정·결과지가 모두 영구 삭제되며 되돌릴 수 없습니다.\n` +
+          `정말 삭제하시겠습니까?`
+      );
+      if (!warn) return;
+      const confirmFinal = window.confirm(`마지막 확인입니다. '${period.title}'과(와) 연결된 모든 데이터를 영구 삭제합니다. 계속할까요?`);
+      if (!confirmFinal) return;
+    } else {
+      const ok = window.confirm(`'${period.title}' 평가월을 삭제할까요?\n입력된 응답 데이터는 없지만, 이 평가월의 QR·반배정 설정은 함께 삭제됩니다.`);
+      if (!ok) return;
+    }
+
+    try {
+      setDeleteBusy(true);
+      setMessage(`${period.title} 평가월을 삭제하는 중입니다.`);
+      const body = await api("/api/admin/evaluation-periods", {
+        method: "DELETE",
+        body: JSON.stringify({ id: period.id })
+      });
+      // 삭제한 평가월이 현재 선택된 리포트 평가월이면 선택 해제
+      if (selectedReportPeriodId === period.id) setSelectedReportPeriodId("");
+      await loadData();
+      setMessage(body.message || "평가월을 삭제했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setDeleteBusy(false);
     }
   }
 
@@ -4818,18 +4911,32 @@ export default function AdminPage() {
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="h2">새 평가월 만들기</h2>
               <p className="muted small">한 평가월을 진행중 또는 마감으로 바꿔도 다른 평가월 상태는 자동 변경되지 않습니다.</p>
-              <div className="grid grid-2">
-                <Field label="평가월">
+              <div className="grid grid-4">
+                <Field label="연도">
                   <select
                     className="select"
-                    value={newPeriod.year_month}
+                    value={newPeriodYear}
                     onChange={(e) => {
-                      const yearMonth = e.target.value;
-                      setNewPeriod({ ...newPeriod, year_month: yearMonth, title: monthTitleFromYearMonth(yearMonth) });
+                      const month = newPeriodMonth || "01";
+                      setNewPeriodYearMonth(`${e.target.value}-${month}`);
                     }}
                   >
-                    {periodMonthOptions.map((month) => (
-                      <option key={month.value} value={month.value}>{month.label}</option>
+                    {periodYearOptions.map((year) => (
+                      <option key={year} value={String(year)}>{year}년</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="월">
+                  <select
+                    className="select"
+                    value={newPeriodMonth}
+                    onChange={(e) => {
+                      const year = newPeriodYear || String(new Date().getFullYear());
+                      setNewPeriodYearMonth(`${year}-${e.target.value}`);
+                    }}
+                  >
+                    {Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0")).map((mm) => (
+                      <option key={mm} value={mm}>{Number(mm)}월</option>
                     ))}
                   </select>
                 </Field>
@@ -4859,7 +4966,7 @@ export default function AdminPage() {
                     <th>평가 이름</th>
                     <th>상태</th>
                     <th>잠금</th>
-                    <th>저장</th>
+                    <th>기능</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -4885,7 +4992,10 @@ export default function AdminPage() {
                           {period.is_locked ? (
                             <button className="btn secondary" onClick={() => { setSelectedSafetyPeriodId(period.id); setTab("safety"); }}>운영 안전에서 해제</button>
                           ) : (
-                            <button className="btn secondary" onClick={() => updatePeriod(period.id)}>저장</button>
+                            <div className="row-actions">
+                              <button className="btn secondary sm" onClick={() => updatePeriod(period.id)}>저장</button>
+                              <button className="btn danger sm" onClick={() => deletePeriod(period)} disabled={deleteBusy}>삭제</button>
+                            </div>
                           )}
                         </td>
                       </tr>
