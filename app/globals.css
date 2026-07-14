@@ -954,6 +954,28 @@ td .input, td .select {
     box-shadow: none;
   }
 
+  /* QR 인쇄: 그리드 대신 inline-block로 배치해 카드가 페이지 경계에서 잘리지 않게 */
+  .qr-grid {
+    display: block !important;
+  }
+
+  .qr-grid .qr-card {
+    display: inline-block;
+    width: 47%;
+    vertical-align: top;
+    margin: 0 1% 12px;
+    padding: 14px;
+    border: 1px solid #cbd3df !important;
+    border-radius: 12px;
+    page-break-inside: avoid;
+    break-inside: avoid;
+  }
+
+  .qr-grid .qr-card .qr-image {
+    width: 168px;
+    height: 168px;
+  }
+
   .report-page {
     width: 100%;
     min-height: 0;

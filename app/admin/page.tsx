@@ -1635,6 +1635,8 @@ export default function AdminPage() {
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>("");
   const [selectedReportPeriodId, setSelectedReportPeriodId] = useState<string>("");
   const [selectedQrPeriodId, setSelectedQrPeriodId] = useState<string>("");
+  const [qrTeacherFilter, setQrTeacherFilter] = useState<string>("all");
+  const [qrClassFilter, setQrClassFilter] = useState<string>("all");
   const [selectedAssignmentPeriodId, setSelectedAssignmentPeriodId] = useState<string>("");
   const [selectedHomePeriodId, setSelectedHomePeriodId] = useState<string>("");
   const [selectedSafetyPeriodId, setSelectedSafetyPeriodId] = useState<string>("");
@@ -4018,8 +4020,32 @@ export default function AdminPage() {
 
   const displayedQrLinks = useMemo(() => {
     const periodId = selectedQrPeriod?.id;
-    return (data?.qrLinks || []).filter((link: any) => !periodId || link.evaluation_period_id === periodId);
-  }, [data, selectedQrPeriod]);
+    return (data?.qrLinks || [])
+      .filter((link: any) => !periodId || link.evaluation_period_id === periodId)
+      .filter((link: any) => qrTeacherFilter === "all" || link.teacher_id === qrTeacherFilter)
+      .filter((link: any) => qrClassFilter === "all" || link.class_id === qrClassFilter);
+  }, [data, selectedQrPeriod, qrTeacherFilter, qrClassFilter]);
+
+  // QR 필터용 옵션 (선택 평가월 기준)
+  const qrFilterOptions = useMemo(() => {
+    const periodId = selectedQrPeriod?.id;
+    const inPeriod = (data?.qrLinks || []).filter((link: any) => !periodId || link.evaluation_period_id === periodId);
+    const teacherMap = new Map<string, string>();
+    const classMap = new Map<string, string>();
+    for (const link of inPeriod) {
+      if (link.teacher_id) teacherMap.set(link.teacher_id, link.teachers?.name || "선생님");
+      if (qrTeacherFilter === "all" || link.teacher_id === qrTeacherFilter) {
+        if (link.class_id) {
+          const name = classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반";
+          classMap.set(link.class_id, name);
+        }
+      }
+    }
+    return {
+      teachers: Array.from(teacherMap, ([id, name]) => ({ id, name })),
+      classes: Array.from(classMap, ([id, name]) => ({ id, name }))
+    };
+  }, [data, selectedQrPeriod, qrTeacherFilter, classDisplayNames]);
 
   const periodResponses = useMemo(() => {
     const periodId = selectedReportPeriod?.id || currentPeriod?.id;
@@ -5813,29 +5839,41 @@ export default function AdminPage() {
                 <p className="muted">선생님·반별 QR을 출력해 교실에서 나눠주면 됩니다.</p>
               </div>
               <div className="btn-row">
-                <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => setSelectedQrPeriodId(e.target.value)}>
+                <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => { setSelectedQrPeriodId(e.target.value); setQrTeacherFilter("all"); setQrClassFilter("all"); }}>
                   {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
                 </select>
+                <select className="select" value={qrTeacherFilter} onChange={(e) => { setQrTeacherFilter(e.target.value); setQrClassFilter("all"); }}>
+                  <option value="all">전체 선생님</option>
+                  {qrFilterOptions.teachers.map((t: any) => <option key={t.id} value={t.id}>{t.name} 선생님</option>)}
+                </select>
+                <select className="select" value={qrClassFilter} onChange={(e) => setQrClassFilter(e.target.value)}>
+                  <option value="all">전체 반</option>
+                  {qrFilterOptions.classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
                 <button className="btn secondary" onClick={() => generateQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>{qrBusy ? "QR 생성 중..." : "QR 전체 생성"}</button>
-                <button className="btn" onClick={() => window.print()}>현재 화면 출력</button>
+                <button className="btn" onClick={() => window.print()}>선택 QR 인쇄 ({displayedQrLinks.length}장)</button>
               </div>
             </div>
 
-            <div className="grid grid-2" style={{ marginTop: 18 }}>
+            <div className="grid grid-2 qr-grid" style={{ marginTop: 18 }}>
               {displayedQrLinks.map((link: any) => {
                 const url = `${appUrl}/s/${link.token}`;
+                const qrClassName = classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정";
                 return (
                   <div className="qr-card" key={link.id}>
-                    <h2 className="h2">e강의평가</h2>
-                    <p className="muted">{link.evaluation_periods?.title}</p>
-                    <h3 className="h3">{link.teachers?.name} 선생님</h3>
-                    <p><b>{classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정"}</b></p>
+                    <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                      <b style={{ fontSize: 18, letterSpacing: "-0.03em" }}>목동유쌤영어학원</b>
+                      <span className="muted small">e강의평가 · {link.evaluation_periods?.title}</span>
+                    </div>
+                    <h3 className="h3" style={{ marginTop: 8 }}>{link.teachers?.name} 선생님</h3>
+                    <p><b>{qrClassName}</b></p>
                     {qrImages[link.id] ? <img className="qr-image" src={qrImages[link.id]} alt="QR 코드" /> : <div className="qr-image" />}
-                    <div className="notice" style={{ marginTop: 14 }}>
-                      <b>안내</b>
-                      <br />1. QR코드를 스캔해주세요.
-                      <br />2. 본인 이름을 정확히 입력해주세요.
-                      <br />3. 제출 완료 화면을 관리자에게 보여주세요.
+                    <div className="notice qr-guide" style={{ marginTop: 14 }}>
+                      <b>강의평가 참여 안내</b>
+                      <br />1. QR코드를 스캔해 설문에 접속하세요.
+                      <br />2. 본인 이름을 정확히 입력하세요.
+                      <br />3. 수업을 솔직하고 성실하게 평가해주세요. (응답은 익명으로 처리됩니다)
+                      <br />4. 제출 완료 화면을 선생님께 보여주세요.
                     </div>
                     <p className="muted" style={{ wordBreak: "break-all" }}>{url}</p>
                     <a className="btn secondary no-print" href={url} target="_blank">설문 링크 열기</a>
