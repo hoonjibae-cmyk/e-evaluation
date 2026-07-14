@@ -27,18 +27,23 @@ export async function POST(request: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
+    const teacherId = cleanText(body.teacher_id);
+    const directionMode = cleanText(body.direction_mode) === "oneway" ? "oneway" : "bidirectional";
+
     const res = await supabase
       .from("class_name_mappings")
       .upsert(
         {
+          teacher_id: teacherId,
           from_class_id: fromClassId,
           to_class_id: toClassId,
+          direction_mode: directionMode,
           memo: cleanText(body.memo),
           is_active: body.is_active === undefined ? true : Boolean(body.is_active),
           created_by: guard.admin.adminId,
           updated_at: new Date().toISOString()
         },
-        { onConflict: "from_class_id,to_class_id" }
+        { onConflict: "teacher_id,from_class_id,to_class_id" }
       )
       .select("*, from_class:classes!class_name_mappings_from_class_id_fkey(*), to_class:classes!class_name_mappings_to_class_id_fkey(*)")
       .single();
@@ -46,8 +51,10 @@ export async function POST(request: NextRequest) {
     if (res.error) throw res.error;
 
     await logAction(supabase, guard.admin, "class_mapping_upsert", "class_name_mappings", res.data?.id, {
+      teacher_id: teacherId,
       from_class_id: fromClassId,
-      to_class_id: toClassId
+      to_class_id: toClassId,
+      direction_mode: directionMode
     });
 
     return NextResponse.json({ ok: true, mapping: res.data });
@@ -89,6 +96,44 @@ export async function PATCH(request: NextRequest) {
     await logAction(supabase, guard.admin, "class_mapping_update", "class_name_mappings", id, payload);
 
     return NextResponse.json({ ok: true, mapping: res.data });
+  } catch (error: any) {
+    return NextResponse.json({ error: toSafeErrorMessage(error) }, { status: 500 });
+  }
+}
+
+// 매칭 삭제: id 하나 삭제, 또는 teacher_id 지정 시 그 선생님 매칭 전체 삭제
+export async function DELETE(request: NextRequest) {
+  const guard = requireAdmin(request, "manage_master_data");
+  if (!guard.ok) return guard.response;
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = cleanText(searchParams.get("id"));
+    const teacherId = cleanText(searchParams.get("teacher_id"));
+
+    if (!id && !teacherId) {
+      return NextResponse.json({ error: "삭제할 매칭 ID 또는 선생님을 지정해주세요." }, { status: 400 });
+    }
+
+    const supabase = getSupabaseAdmin();
+
+    let query = supabase.from("class_name_mappings").delete({ count: "exact" });
+    if (id) {
+      query = query.eq("id", id);
+    } else {
+      query = query.eq("teacher_id", teacherId as string);
+    }
+
+    const res = await query;
+    if (res.error) throw res.error;
+
+    await logAction(supabase, guard.admin, "class_mapping_delete", "class_name_mappings", id || teacherId, {
+      id,
+      teacherId,
+      deleted: res.count || 0
+    });
+
+    return NextResponse.json({ ok: true, deleted: res.count || 0 });
   } catch (error: any) {
     return NextResponse.json({ error: toSafeErrorMessage(error) }, { status: 500 });
   }

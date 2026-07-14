@@ -2242,7 +2242,7 @@ export default function AdminPage() {
     }));
   }
 
-  function addReportClassMapping() {
+  async function addReportClassMapping() {
     const form = currentReportMappingForm || {};
     if (!selectedTeacher?.id) {
       setMessage("반 이름 매칭을 적용할 선생님을 먼저 선택해주세요.");
@@ -2257,52 +2257,111 @@ export default function AdminPage() {
       return;
     }
 
-    const fromName = activeClasses.find((item: any) => item.id === form.from_class_id)?.name || "이전반";
-    const toName = activeClasses.find((item: any) => item.id === form.to_class_id)?.name || "기준반";
     const directionMode = form.direction_mode === "oneway" ? "oneway" : "bidirectional";
-    const isBidirectional = directionMode === "bidirectional";
-    const directionLabel = isBidirectional ? "양방향" : "단방향";
-    const directionSymbol = isBidirectional ? "↔" : "→";
-    const nextMapping = {
-      id: `${currentReportMappingKey}:${form.from_class_id}:${form.to_class_id}:${directionMode}:${Date.now()}`,
-      scope: "teacher_all_periods",
-      teacher_id: selectedTeacher.id,
-      from_class_id: form.from_class_id,
-      to_class_id: form.to_class_id,
-      direction_mode: directionMode,
-      memo: form.memo || "",
-      bidirectional: isBidirectional,
-      is_active: true
-    };
-
-    setReportClassMappings((prev) => {
-      const rows = (prev[currentReportMappingKey] || []).filter((row: any) => {
-        const rowDirectionMode = row.direction_mode || (row.bidirectional === false ? "oneway" : "bidirectional");
-        const sameForward = row.from_class_id === form.from_class_id && row.to_class_id === form.to_class_id;
-        const sameReverse = row.from_class_id === form.to_class_id && row.to_class_id === form.from_class_id;
-        if (isBidirectional) return !(sameForward || sameReverse);
-        return !(sameForward && rowDirectionMode === "oneway");
+    try {
+      setMessage("반 이름 매칭을 서버에 저장하는 중입니다...");
+      await api("/api/admin/class-mappings", {
+        method: "POST",
+        body: JSON.stringify({
+          teacher_id: selectedTeacher.id,
+          from_class_id: form.from_class_id,
+          to_class_id: form.to_class_id,
+          direction_mode: directionMode,
+          memo: form.memo || ""
+        })
       });
-      return { ...prev, [currentReportMappingKey]: [...rows, nextMapping] };
-    });
-    setReportClassMappingForms((prev) => ({ ...prev, [currentReportMappingKey]: { from_class_id: "", to_class_id: form.to_class_id, direction_mode: directionMode, memo: "" } }));
-    setMessage(`${selectedTeacher.name} 선생님 전체 월 리포트에 ${fromName} ${directionSymbol} ${toName} 반 이름 매칭을 ${directionLabel}으로 적용합니다.`);
+      await loadData();
+      setReportClassMappingForms((prev) => ({ ...prev, [currentReportMappingKey]: { from_class_id: "", to_class_id: form.to_class_id, direction_mode: directionMode, memo: "" } }));
+      setMessage(`${selectedTeacher.name} 선생님 리포트에 반 이름 매칭을 저장했습니다. (모든 기기에 적용)`);
+    } catch (error: any) {
+      setMessage(error.message);
+    }
   }
 
-  function removeReportClassMapping(mappingId: string) {
-    setReportClassMappings((prev) => ({
-      ...prev,
-      [currentReportMappingKey]: (prev[currentReportMappingKey] || []).filter((row: any) => row.id !== mappingId)
-    }));
-    setMessage("선택 선생님 전체 월 리포트용 반 이름 매칭을 삭제했습니다.");
+  async function removeReportClassMapping(mappingId: string) {
+    try {
+      await api(`/api/admin/class-mappings?id=${encodeURIComponent(mappingId)}`, { method: "DELETE" });
+      await loadData();
+      setMessage("반 이름 매칭을 삭제했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    }
   }
 
-  function clearReportClassMappings() {
-    setReportClassMappings((prev) => ({ ...prev, [currentReportMappingKey]: [] }));
-    setMessage("선택 선생님 전체 월 리포트용 반 이름 매칭을 모두 초기화했습니다.");
+  async function clearReportClassMappings() {
+    if (!selectedTeacher?.id) {
+      setMessage("선생님을 먼저 선택해주세요.");
+      return;
+    }
+    try {
+      await api(`/api/admin/class-mappings?teacher_id=${encodeURIComponent(selectedTeacher.id)}`, { method: "DELETE" });
+      await loadData();
+      setMessage("이 선생님의 반 이름 매칭을 모두 삭제했습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    }
   }
 
+  // 이 브라우저 localStorage에 있던 기존 매칭을 서버로 1회 이전
+  async function migrateLocalMappingsToServer() {
+    try {
+      const saved = typeof window !== "undefined" ? window.localStorage.getItem(REPORT_CLASS_MAPPINGS_STORAGE_KEY) : null;
+      const parsed = saved ? JSON.parse(saved) : {};
+      const rows: any[] = [];
+      for (const [scopeKey, list] of Object.entries(parsed || {})) {
+        const teacherId = String(scopeKey).replace(":all-periods", "");
+        for (const row of (((list as any[]) || []))) {
+          if (!row?.from_class_id || !row?.to_class_id) continue;
+          rows.push({
+            teacher_id: row.teacher_id || teacherId,
+            from_class_id: row.from_class_id,
+            to_class_id: row.to_class_id,
+            direction_mode: row.direction_mode || (row.bidirectional === false ? "oneway" : "bidirectional"),
+            memo: row.memo || ""
+          });
+        }
+      }
+      if (!rows.length) {
+        setMessage("이 브라우저에 서버로 옮길 매칭이 없습니다.");
+        return;
+      }
+      setMessage(`이 브라우저의 매칭 ${rows.length}건을 서버로 저장하는 중입니다...`);
+      let ok = 0;
+      let fail = 0;
+      for (const row of rows) {
+        try {
+          await api("/api/admin/class-mappings", { method: "POST", body: JSON.stringify(row) });
+          ok += 1;
+        } catch {
+          fail += 1;
+        }
+      }
+      await loadData();
+      setMessage(`서버로 매칭 ${ok}건 저장 완료.${fail ? ` (실패 ${fail}건)` : ""} 이제 다른 기기·계정에서도 동일하게 적용됩니다.`);
+    } catch (error: any) {
+      setMessage(error.message);
+    }
+  }
+
+  // 리포트용 반 이름 매칭을 서버(data.classMappings)에서 선생님별로 읽는다.
+  // 서버에 없으면 이 브라우저 localStorage로 폴백(이전 버튼 누르기 전 과도기 안전장치).
   function getScopedReportClassMappings(teacherId: string) {
+    const serverRows = (data?.classMappings || [])
+      .filter((m: any) => m.teacher_id === teacherId && m.is_active !== false)
+      .map((m: any) => {
+        const directionMode = m.direction_mode || (m.bidirectional === false ? "oneway" : "bidirectional");
+        return {
+          id: m.id,
+          teacher_id: m.teacher_id,
+          from_class_id: m.from_class_id,
+          to_class_id: m.to_class_id,
+          direction_mode: directionMode,
+          bidirectional: directionMode !== "oneway",
+          memo: m.memo || "",
+          is_active: m.is_active !== false
+        };
+      });
+    if (serverRows.length) return serverRows;
     return reportClassMappings[reportMappingScopeKey(teacherId)] || [];
   }
 
@@ -3660,7 +3719,7 @@ export default function AdminPage() {
   const reportMappingScopeKey = (teacherId?: string) => `${teacherId || "teacher"}:all-periods`;
   const currentReportMappingKey = reportMappingScopeKey(selectedTeacher?.id || selectedTeacherId || "");
   const currentReportMappingForm = reportClassMappingForms[currentReportMappingKey] || { from_class_id: "", to_class_id: "", direction_mode: "bidirectional", memo: "" };
-  const currentReportClassMappings = reportClassMappings[currentReportMappingKey] || [];
+  const currentReportClassMappings = getScopedReportClassMappings(selectedTeacher?.id || selectedTeacherId || "");
 
   const reportMappingClassOptions = useMemo(() => {
     const teacherId = selectedTeacher?.id || selectedTeacherId || "";
@@ -4609,8 +4668,8 @@ export default function AdminPage() {
               <h2 className="h2">운영 순서</h2>
               <ol>
                 <li><b>평가월 관리</b>에서 이번 달 평가를 만들고 상태를 진행중으로 둡니다.</li>
-                <li><b>선생님 관리</b>에서 선생님 명단을 입력합니다. 반은 <b>선생님-반 배정</b> 화면에서 추가합니다. 명단이 많으면 <b>일괄 등록</b>을 사용합니다.</li>
-                <li>학기가 바뀌어 반 이름이 달라진 경우에는 <b>선생님-반 배정</b> 화면에서 이번 달 반 이름만 바꿔 저장합니다. 과거 달은 이전 이름이 그대로 유지되고, 리포트 추이는 한 줄로 이어집니다.</li>
+                <li><b>선생님 관리</b>와 <b>반 관리</b>에서 실제 명단을 입력합니다. 명단이 많으면 <b>일괄 등록</b>을 사용합니다.</li>
+                <li>학기가 바뀌어 반 이름이 달라진 경우에는 <b>PDF/웹 리포트 생성</b> 화면에서 선택 선생님 전체 월 리포트에 적용되는 반 이름 매칭을 양방향/단방향 중 선택해 설정합니다.</li>
                 <li><b>선생님-반 배정</b>에서 이번 달 선생님과 반을 연결하고, <b>QR 출력</b>에서 QR을 생성합니다.</li>
                 <li>QR 설문이 어려운 레거시/비상 상황은 <b>응답 업로드</b>에서 엑셀 복사 붙여넣기로 등록합니다.</li>
               </ol>
@@ -6294,14 +6353,17 @@ export default function AdminPage() {
                 </Field>
               </div>
 
-              {false /* 반 이름 매칭 제거 (평가월별 표시 이름으로 대체) */ && !isInternalReportTemplate && reportMode === "single" ? (
+              {!isInternalReportTemplate && reportMode === "single" ? (
                 <div className="scoped-mapping-panel" style={{ marginTop: 16 }}>
                   <div className="delivery-policy-head">
                     <div>
                       <b>선생님 전체 월 리포트용 반 이름 매칭</b>
-                      <p className="muted small">선택 선생님에게 월 상관없이 적용됩니다. 다른 선생님에게는 반영되지 않으며, 적용 방식은 양방향/단방향 중 선택할 수 있습니다.</p>
+                      <p className="muted small">서버에 저장되어 모든 기기·계정에서 동일하게 적용됩니다. 선택 선생님에게 월 상관없이 적용되며, 방식은 양방향/단방향 중 선택할 수 있습니다.</p>
                     </div>
-                    <span className="badge">{currentReportClassMappings.length}건 적용</span>
+                    <div className="btn-row">
+                      <button type="button" className="btn secondary sm" onClick={migrateLocalMappingsToServer} title="이 브라우저 localStorage에 있던 예전 매칭을 서버로 1회 옮깁니다">이 브라우저 매칭 → 서버 이전(1회)</button>
+                      <span className="badge">{currentReportClassMappings.length}건 적용</span>
+                    </div>
                   </div>
                   <div className="grid grid-5" style={{ marginTop: 10 }}>
                     <Field label="합산할 이전반">
