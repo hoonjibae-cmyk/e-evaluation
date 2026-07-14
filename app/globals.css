@@ -671,6 +671,12 @@ td .input, td .select {
   break-inside: avoid;
 }
 
+.qr-academy {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
 .qr-image {
   width: 210px;
   height: 210px;
@@ -925,6 +931,19 @@ td .input, td .select {
     display: none !important;
   }
 
+  /* 인쇄 시 관리자 사이드바 제거 + 100vh 최소높이 제거(빈 페이지 방지) */
+  .side-menu {
+    display: none !important;
+  }
+  .app-shell,
+  .admin-shell,
+  .admin-main,
+  .admin-content {
+    display: block !important;
+    min-height: 0 !important;
+    height: auto !important;
+  }
+
   .container {
     max-width: none;
     padding: 0 !important;
@@ -986,6 +1005,9 @@ td .input, td .select {
     width: 116px;
     height: 116px;
     padding: 5px;
+  }
+  .qr-grid.qr-fit-page .qr-academy {
+    font-size: 11pt;
   }
   .qr-grid.qr-fit-page .qr-card h3 {
     font-size: 11pt;

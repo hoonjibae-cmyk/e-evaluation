@@ -5896,7 +5896,7 @@ export default function AdminPage() {
                 return (
                   <div className="qr-card" key={link.id}>
                     <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                      <b style={{ fontSize: 18, letterSpacing: "-0.03em" }}>목동유쌤영어학원</b>
+                      <b className="qr-academy">목동유쌤영어학원</b>
                       <span className="muted small">e강의평가 · {link.evaluation_periods?.title}</span>
                     </div>
                     <h3 className="h3" style={{ marginTop: 8 }}>{link.teachers?.name} 선생님</h3>
