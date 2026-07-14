@@ -4609,8 +4609,8 @@ export default function AdminPage() {
               <h2 className="h2">운영 순서</h2>
               <ol>
                 <li><b>평가월 관리</b>에서 이번 달 평가를 만들고 상태를 진행중으로 둡니다.</li>
-                <li><b>선생님 관리</b>와 <b>반 관리</b>에서 실제 명단을 입력합니다. 명단이 많으면 <b>일괄 등록</b>을 사용합니다.</li>
-                <li>학기가 바뀌어 반 이름이 달라진 경우에는 <b>PDF/웹 리포트 생성</b> 화면에서 선택 선생님 전체 월 리포트에 적용되는 반 이름 매칭을 양방향/단방향 중 선택해 설정합니다.</li>
+                <li><b>선생님 관리</b>에서 선생님 명단을 입력합니다. 반은 <b>선생님-반 배정</b> 화면에서 추가합니다. 명단이 많으면 <b>일괄 등록</b>을 사용합니다.</li>
+                <li>학기가 바뀌어 반 이름이 달라진 경우에는 <b>선생님-반 배정</b> 화면에서 이번 달 반 이름만 바꿔 저장합니다. 과거 달은 이전 이름이 그대로 유지되고, 리포트 추이는 한 줄로 이어집니다.</li>
                 <li><b>선생님-반 배정</b>에서 이번 달 선생님과 반을 연결하고, <b>QR 출력</b>에서 QR을 생성합니다.</li>
                 <li>QR 설문이 어려운 레거시/비상 상황은 <b>응답 업로드</b>에서 엑셀 복사 붙여넣기로 등록합니다.</li>
               </ol>
@@ -6294,7 +6294,7 @@ export default function AdminPage() {
                 </Field>
               </div>
 
-              {!isInternalReportTemplate && reportMode === "single" ? (
+              {false /* 반 이름 매칭 제거 (평가월별 표시 이름으로 대체) */ && !isInternalReportTemplate && reportMode === "single" ? (
                 <div className="scoped-mapping-panel" style={{ marginTop: 16 }}>
                   <div className="delivery-policy-head">
                     <div>
@@ -7030,35 +7030,13 @@ function TeacherReport({
     const toClassId = bidirectionalCanonicalClassId(mapping.to_class_id);
     if (fromClassId && toClassId && fromClassId !== toClassId) oneWayClassMap.set(fromClassId, toClassId);
   }
-  const canonicalClassId = (classId: any) => {
-    let current = bidirectionalCanonicalClassId(classId);
-    if (!current) return "";
-    const visited = new Set<string>();
-    for (let index = 0; index < 10; index += 1) {
-      if (visited.has(current)) break;
-      visited.add(current);
-      const next = oneWayClassMap.get(current);
-      if (!next || next === current) break;
-      current = bidirectionalCanonicalClassId(next);
-    }
-    return current;
-  };
-  const canonicalClassName = (classId: any, fallback: string) => {
-    const id = canonicalClassId(classId);
-    return classById.get(id)?.name || fallback || "반 미지정";
-  };
+  // 반 이름 매칭 기능 제거: 매칭 합산 없이 각 반을 그대로 사용(항등).
+  // (평가월별 표시 이름으로 대체됨)
+  const canonicalClassId = (classId: any) => classId || "";
+  const canonicalClassName = (_classId: any, fallback: string) => fallback || "반 미지정";
 
-  const classMappingLegendItems = activeMappings.map((mapping: any) => {
-    const fromName = classById.get(String(mapping.from_class_id || ""))?.name || "이전반";
-    const toName = classById.get(String(mapping.to_class_id || ""))?.name || "기준반";
-    const directionMode = mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional");
-    const isBidirectional = directionMode !== "oneway";
-    return {
-      id: mapping.id || `${mapping.from_class_id}-${mapping.to_class_id}-${directionMode}`,
-      label: `${fromName} ${isBidirectional ? "↔" : "→"} ${toName}`,
-      modeLabel: isBidirectional ? "양방향" : "단방향"
-    };
-  });
+  // 반 이름 매칭 제거로 범례 미표시
+  const classMappingLegendItems: any[] = [];
 
   const scoreRows = (classScores || [])
     .filter((row: any) => recentPeriodIds.has(row.evaluation_period_id))
@@ -7202,7 +7180,7 @@ function TeacherReport({
               <div className="trend-card-head">
                 <div>
                   <h2 className="h2">반별 점수 흐름</h2>
-                  <p className="muted">선생님 전체 월 리포트용 반 이름 매칭을 설정한 경우 선택한 방식에 따라 해당 선생님의 모든 월 리포트에서 반 이름을 합산합니다.</p>
+                  <p className="muted">같은 반은 이름이 바뀌어도 한 줄로 이어지며, 각 달의 반 표시 이름으로 라벨링됩니다.</p>
                 </div>
                 <div className="trend-legend-stack">
                   <div className="trend-legend">
