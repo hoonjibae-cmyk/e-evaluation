@@ -2801,6 +2801,43 @@ export default function AdminPage() {
     }
   }
 
+  async function deleteAllQrLinks(periodId?: string) {
+    const targetPeriodId = periodId || selectedQrPeriod?.id || currentPeriod?.id;
+    if (!targetPeriodId) {
+      setMessage("삭제할 평가월을 먼저 선택해주세요.");
+      return;
+    }
+    const targetPeriod = (data?.periods || []).find((period: any) => period.id === targetPeriodId);
+    const qrCount = (data?.qrLinks || []).filter((link: any) => link.evaluation_period_id === targetPeriodId).length;
+    if (!qrCount) {
+      setMessage("이 평가월에 삭제할 QR이 없습니다.");
+      return;
+    }
+    const periodLabel = targetPeriod?.title || targetPeriod?.year_month || "선택 평가월";
+    const ok = window.confirm(
+      `'${periodLabel}'의 QR ${qrCount}건을 전체 삭제할까요?\n\n` +
+        `· 다시 만들려면 'QR 전체 생성'을 눌러 새로 발급하면 됩니다.\n` +
+        `· 새로 만든 QR은 새 주소로 발급되므로, 이미 인쇄해 배포한 QR은 더 이상 열리지 않습니다.\n` +
+        `· 이미 제출된 응답 데이터는 삭제되지 않고 그대로 보존됩니다.`
+    );
+    if (!ok) return;
+
+    try {
+      setQrBusy(true);
+      setMessage(`${periodLabel}의 QR을 삭제하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.`);
+      const body = await api("/api/admin/qr-links/delete-all", {
+        method: "POST",
+        body: JSON.stringify({ evaluationPeriodId: targetPeriodId })
+      });
+      await loadData();
+      setQrBusy(false);
+      setMessage(body.message || `QR ${body.deleted ?? qrCount}건을 삭제했습니다.`);
+    } catch (error: any) {
+      setQrBusy(false);
+      setMessage(`QR 삭제에 실패했습니다.\n${error.message || "오류 내용을 확인할 수 없습니다."}`);
+    }
+  }
+
   async function saveWithdrawalRates() {
     try {
       const period = selectedReportPeriod || currentPeriod;
@@ -6032,6 +6069,7 @@ export default function AdminPage() {
                 </div>
                 <div className="btn-row">
                   <button className="btn secondary" onClick={() => generateQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>{qrBusy ? "QR 생성 중..." : "QR 전체 생성"}</button>
+                  <button className="btn danger" onClick={() => deleteAllQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>QR 전체 삭제</button>
                   <button className="btn" onClick={() => printQr("all")}>전체 출력</button>
                   <button className="btn soft" onClick={() => printQr("teacher")}>선생님별 출력 (1페이지)</button>
                   <button className="btn soft" onClick={() => printQr("class")}>반별 출력 (1페이지)</button>
