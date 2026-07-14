@@ -5895,19 +5895,18 @@ export default function AdminPage() {
                 const qrClassName = classDisplayNames.get(`${link.evaluation_period_id}|${link.teacher_id}|${link.class_id}`) || link.classes?.name || "반 미지정";
                 return (
                   <div className="qr-card" key={link.id}>
-                    <div className="qr-card-head" style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
-                      <b className="qr-academy">목동유쌤영어학원</b>
+                    <div className="qr-card-head">
                       <span className="muted small qr-subtitle">e강의평가 · {link.evaluation_periods?.title}</span>
                     </div>
-                    <h3 className="h3" style={{ marginTop: 8 }}>{link.teachers?.name} 선생님</h3>
+                    <h3 className="h3" style={{ marginTop: 4 }}>{link.teachers?.name} 선생님</h3>
                     <p><b>{qrClassName}</b></p>
                     {qrImages[link.id] ? <img className="qr-image" src={qrImages[link.id]} alt="QR 코드" /> : <div className="qr-image" />}
-                    <div className="notice qr-guide" style={{ marginTop: 14 }}>
-                      <b>강의평가 참여 안내</b>
-                      <br />1. QR코드를 스캔해 설문에 접속하세요.
-                      <br />2. 본인 이름을 정확히 입력하세요.
-                      <br />3. 수업을 솔직하고 성실하게 평가해주세요. (응답은 익명으로 처리됩니다)
-                      <br />4. 제출 완료 화면을 선생님께 보여주세요.
+                    <div className="notice qr-guide" style={{ marginTop: 12 }}>
+                      <b>강의평가 안내</b>
+                      <br />1. QR 스캔 → 설문 접속
+                      <br />2. 본인 이름 정확히 입력
+                      <br />3. 솔직·성실하게 평가 (익명 처리)
+                      <br />4. 제출 완료 화면 선생님께
                     </div>
                     <p className="muted qr-url" style={{ wordBreak: "break-all" }}>{url}</p>
                     <a className="btn secondary no-print" href={url} target="_blank">설문 링크 열기</a>
