@@ -6657,17 +6657,19 @@ export default function AdminPage() {
               </div>
 
               {!isInternalReportTemplate && reportMode === "single" ? (
-                <div className="scoped-mapping-panel" style={{ marginTop: 16 }}>
-                  <div className="delivery-policy-head">
-                    <div>
-                      <b>선생님 전체 월 리포트용 반 이름 매칭</b>
+                <details className="scoped-mapping-panel" style={{ marginTop: 16 }}>
+                  <summary style={{ cursor: "pointer", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                    <b>선생님 전체 월 리포트용 반 이름 매칭</b>
+                    <span className="badge">{currentReportClassMappings.length}건 적용</span>
+                    <span className="muted small">평소엔 접혀 있습니다. 7월 리포트처럼 반 이름 합산이 필요할 때만 펼치세요.</span>
+                  </summary>
+                  <div style={{ marginTop: 12 }}>
+                    <div className="delivery-policy-head">
                       <p className="muted small">서버에 저장되어 모든 기기·계정에서 동일하게 적용됩니다. 선택 선생님에게 월 상관없이 적용되며, 방식은 양방향/단방향 중 선택할 수 있습니다.</p>
+                      <div className="btn-row">
+                        <button type="button" className="btn secondary sm" onClick={migrateLocalMappingsToServer} title="이 브라우저 localStorage에 있던 예전 매칭을 서버로 1회 옮깁니다">이 브라우저 매칭 → 서버 이전(1회)</button>
+                      </div>
                     </div>
-                    <div className="btn-row">
-                      <button type="button" className="btn secondary sm" onClick={migrateLocalMappingsToServer} title="이 브라우저 localStorage에 있던 예전 매칭을 서버로 1회 옮깁니다">이 브라우저 매칭 → 서버 이전(1회)</button>
-                      <span className="badge">{currentReportClassMappings.length}건 적용</span>
-                    </div>
-                  </div>
                   <div className="grid grid-5" style={{ marginTop: 10 }}>
                     <Field label="합산할 이전반">
                       <select className="select" value={currentReportMappingForm.from_class_id || ""} onChange={(e) => updateReportClassMappingForm({ from_class_id: e.target.value })}>
@@ -6732,7 +6734,8 @@ export default function AdminPage() {
                     <p className="muted small" style={{ marginTop: 8 }}>선택 선생님 전체 월 리포트에 적용할 반 이름 매칭이 없습니다. 필요한 경우에만 추가하세요.</p>
                   )}
                   {currentReportClassMappings.length ? <button type="button" className="btn secondary" style={{ marginTop: 10 }} onClick={clearReportClassMappings}>선택 선생님 매칭 모두 삭제</button> : null}
-                </div>
+                  </div>
+                </details>
               ) : null}
 
               <div className="form-row">
