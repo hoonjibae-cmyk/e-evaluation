@@ -1676,6 +1676,7 @@ export default function AdminPage() {
   const [legacyUploadBusy, setLegacyUploadBusy] = useState(false);
   const [withdrawalBusy, setWithdrawalBusy] = useState(false);
   const [assignmentSetupBusy, setAssignmentSetupBusy] = useState(false);
+  const [closeMonthBusy, setCloseMonthBusy] = useState(false);
   const [classNameDrafts, setClassNameDrafts] = useState<Record<string, string>>({});
   const [addPairTeacherId, setAddPairTeacherId] = useState<string>("");
   const [addPairClassName, setAddPairClassName] = useState<string>("");
@@ -1736,7 +1737,8 @@ export default function AdminPage() {
     || bulkImportBusy
     || legacyUploadBusy
     || withdrawalBusy
-    || assignmentSetupBusy;
+    || assignmentSetupBusy
+    || closeMonthBusy;
 
   const isInternalReportTemplate = reportTemplate === "internal";
 
@@ -3164,6 +3166,42 @@ export default function AdminPage() {
       setMessage(error.message);
     } finally {
       setSlackBusy("");
+    }
+  }
+
+  async function closeMonth() {
+    try {
+      const period = selectedReportPeriod || currentPeriod;
+      if (!period?.id) {
+        setMessage("마감 처리할 평가월을 먼저 선택해주세요.");
+        return;
+      }
+      if (period.status === "closed") {
+        setMessage(`${period.title}은(는) 이미 마감된 평가월입니다.`);
+        return;
+      }
+      const ok = window.confirm(
+        `'${period.title}' 설문조사를 마감 처리할까요?\n\n` +
+          `· 평가월 상태가 '마감'으로 변경됩니다.\n` +
+          `· 총괄관리자에게 Slack 알림이 발송됩니다.\n\n` +
+          `모든 반의 설문 운영이 끝났을 때만 진행해주세요.`
+      );
+      if (!ok) return;
+
+      setCloseMonthBusy(true);
+      setMessage("설문조사 마감 처리 중입니다. 완료될 때까지 이 창을 닫지 마세요.");
+
+      const body = await api("/api/admin/close-month", {
+        method: "POST",
+        body: JSON.stringify({ evaluation_period_id: period.id })
+      });
+
+      await loadData();
+      setMessage(body.message || `${period.title}을(를) 마감 처리했습니다.`);
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setCloseMonthBusy(false);
     }
   }
 
@@ -6110,6 +6148,41 @@ export default function AdminPage() {
               반별 제출 수, 중복 의심, 검토 필요 응답을 한 화면에서 확인할 수 있습니다.
             </p>
 
+            <div
+              className="no-print"
+              style={{
+                marginTop: 16,
+                padding: "14px 16px",
+                border: "1px solid var(--line)",
+                borderRadius: 12,
+                background: "var(--surface-muted, #f6f4f9)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap"
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 700 }}>해당월 설문조사 마감처리</div>
+                <p className="muted" style={{ margin: "4px 0 0" }}>
+                  {(() => {
+                    const p = selectedReportPeriod || currentPeriod;
+                    if (!p) return "마감할 평가월을 선택해주세요.";
+                    if (p.status === "closed") return `${p.title}은(는) 이미 마감된 평가월입니다.`;
+                    return `${p.title}의 모든 반 설문 운영이 끝났다면 마감 처리하세요. 총괄관리자에게 Slack 알림이 발송되고 평가월이 '마감'으로 변경됩니다.`;
+                  })()}
+                </p>
+              </div>
+              <button
+                className="btn"
+                onClick={closeMonth}
+                disabled={closeMonthBusy || (selectedReportPeriod || currentPeriod)?.status === "closed"}
+              >
+                {closeMonthBusy ? "마감 처리 중…" : "해당월 설문조사 마감처리"}
+              </button>
+            </div>
+
             <div className="grid grid-4" style={{ marginTop: 18 }}>
               <Stat label="선택 평가월 응답" value={`${responseStats.total}건`} />
               <Stat label="정상 응답" value={`${responseStats.normal}건`} />
@@ -6281,8 +6354,17 @@ export default function AdminPage() {
 
         {tab === "results" && (
           <section className="card">
-            <h1 className="h1">결과 분석</h1>
-            <p className="muted">선생님 평가 5문항 기준 평균 점수입니다. 학원 시설/수업시간/클리닉은 선생님 등수 계산에서 제외합니다.</p>
+            <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h1 className="h1">결과 분석</h1>
+                <p className="muted">선생님 평가 5문항 기준 평균 점수입니다. 학원 시설/수업시간/클리닉은 선생님 등수 계산에서 제외합니다.</p>
+              </div>
+              <Field label="평가월">
+                <select className="select" value={selectedReportPeriod?.id || ""} onChange={(e) => setSelectedReportPeriodId(e.target.value)}>
+                  {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
+                </select>
+              </Field>
+            </div>
             <div className="grid grid-2" style={{ marginTop: 18 }}>
               <div className="card">
                 <h2 className="h2">선생님별 강의평가 점수</h2>
