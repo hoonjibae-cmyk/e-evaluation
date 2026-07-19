@@ -10,6 +10,81 @@ const TOAST_AUTO_CLOSE_MS = 9000;
 const REPORT_CLASS_MAPPINGS_STORAGE_KEY = "e-evaluation-report-class-mappings-v267";
 const VERCEL_SAFE_UPLOAD_BYTES = 4 * 1024 * 1024;
 
+const ADMIN_SESSION_KEY = "e-evaluation-admin-session";
+const ADMIN_USER_KEY = "e-evaluation-admin-user";
+const ADMIN_REMEMBER_KEY = "e-evaluation-admin-remember";
+
+// 세션 토큰(payload.signature)의 payload를 클라이언트에서 디코드해 만료 여부만 확인합니다.
+// (서명 검증은 서버가 담당. 여기서는 만료된 토큰으로 '로그인된 것처럼' 보이는 문제를 막는 용도)
+function decodeAdminTokenExp(token: string): number | null {
+  try {
+    const [encoded] = String(token || "").split(".");
+    if (!encoded) return null;
+    const b64 = encoded.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = b64 + "===".slice((b64.length + 3) % 4);
+    const json = typeof atob !== "undefined" ? atob(padded) : "";
+    const payload = JSON.parse(json);
+    return typeof payload?.exp === "number" ? payload.exp : null;
+  } catch {
+    return null;
+  }
+}
+
+function isAdminTokenValid(token: string): boolean {
+  const exp = decodeAdminTokenExp(token);
+  if (!exp) return false;
+  return exp > Math.floor(Date.now() / 1000);
+}
+
+// 자동 로그인(remember) 여부에 따라 localStorage(영구) 또는 sessionStorage(창 닫으면 소멸)에 저장합니다.
+function isRememberAdmin(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(ADMIN_REMEMBER_KEY) === "1";
+}
+
+function readStoredAdminSession(): { token: string; admin: any; remember: boolean } {
+  if (typeof window === "undefined") return { token: "", admin: null, remember: false };
+  const remember = isRememberAdmin();
+  const store = remember ? window.localStorage : window.sessionStorage;
+  const token = store.getItem(ADMIN_SESSION_KEY) || "";
+  let admin: any = null;
+  const adminText = store.getItem(ADMIN_USER_KEY) || "";
+  if (adminText) {
+    try {
+      admin = JSON.parse(adminText);
+    } catch {
+      admin = null;
+    }
+  }
+  return { token, admin, remember };
+}
+
+function writeStoredAdminSession(token: string, admin: any, remember: boolean) {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(ADMIN_REMEMBER_KEY, remember ? "1" : "0");
+  const store = remember ? window.localStorage : window.sessionStorage;
+  const other = remember ? window.sessionStorage : window.localStorage;
+  store.setItem(ADMIN_SESSION_KEY, token);
+  store.setItem(ADMIN_USER_KEY, JSON.stringify(admin || {}));
+  // 반대편 저장소에 남아있을 수 있는 이전 값 제거
+  other.removeItem(ADMIN_SESSION_KEY);
+  other.removeItem(ADMIN_USER_KEY);
+}
+
+function writeStoredAdminUser(admin: any) {
+  if (typeof window === "undefined") return;
+  const store = isRememberAdmin() ? window.localStorage : window.sessionStorage;
+  store.setItem(ADMIN_USER_KEY, JSON.stringify(admin || {}));
+}
+
+function clearStoredAdminSession() {
+  if (typeof window === "undefined") return;
+  window.localStorage.removeItem(ADMIN_SESSION_KEY);
+  window.localStorage.removeItem(ADMIN_USER_KEY);
+  window.sessionStorage.removeItem(ADMIN_SESSION_KEY);
+  window.sessionStorage.removeItem(ADMIN_USER_KEY);
+}
+
 type TabKey =
   | "home"
   | "checklist"
@@ -1643,6 +1718,7 @@ export default function AdminPage() {
   const [setupPassword, setSetupPassword] = useState("");
   const [sessionToken, setSessionToken] = useState("");
   const [currentAdmin, setCurrentAdmin] = useState<any>(null);
+  const [rememberMe, setRememberMe] = useState(false);
   const [showInitialSetup, setShowInitialSetup] = useState(false);
   const [tab, setTab] = useState<TabKey>("home");
   const [data, setData] = useState<any>(null);
@@ -1788,16 +1864,17 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    const token = localStorage.getItem("e-evaluation-admin-session") || "";
-    const adminText = localStorage.getItem("e-evaluation-admin-user") || "";
-    setSessionToken(token);
-    if (adminText) {
-      try {
-        setCurrentAdmin(JSON.parse(adminText));
-      } catch {
-        localStorage.removeItem("e-evaluation-admin-user");
-      }
+    const { token, admin, remember } = readStoredAdminSession();
+    setRememberMe(remember);
+    // 저장된 토큰이 없거나 만료됐으면 '로그인된 것처럼' 보이지 않도록 정리하고 로그인 화면을 띄웁니다.
+    if (!token || !isAdminTokenValid(token)) {
+      clearStoredAdminSession();
+      setSessionToken("");
+      setCurrentAdmin(null);
+      return;
     }
+    setSessionToken(token);
+    if (admin) setCurrentAdmin(admin);
   }, []);
 
   useEffect(() => {
@@ -1947,7 +2024,7 @@ export default function AdminPage() {
 
     if (data.currentAdmin) {
       setCurrentAdmin(data.currentAdmin);
-      localStorage.setItem("e-evaluation-admin-user", JSON.stringify(data.currentAdmin));
+      writeStoredAdminUser(data.currentAdmin);
     }
 
     const withdrawal: Record<string, string> = {};
@@ -1984,6 +2061,15 @@ export default function AdminPage() {
 
     const body = await res.json().catch(() => ({}));
     if (!res.ok) {
+      // 세션 만료/무효(401): '로그인된 것처럼' 보이지 않도록 세션을 정리하고 로그인 화면으로 되돌립니다.
+      if (res.status === 401) {
+        clearStoredAdminSession();
+        setSessionToken("");
+        setCurrentAdmin(null);
+        setData(null);
+        setResponsesByPeriod({});
+        throw new Error("로그인이 만료되었습니다. 다시 로그인해주세요.");
+      }
       const stage = body.failureStage ? `[${body.failureStage}] ` : "";
       const suggestion = body.suggestion ? ` 조치: ${body.suggestion}` : "";
       throw new Error(`${stage}${body.error || "요청 처리 중 문제가 발생했습니다."}${suggestion}`);
@@ -2047,8 +2133,7 @@ export default function AdminPage() {
   }
 
   function saveSession(token: string, admin: any) {
-    localStorage.setItem("e-evaluation-admin-session", token);
-    localStorage.setItem("e-evaluation-admin-user", JSON.stringify(admin || {}));
+    writeStoredAdminSession(token, admin, rememberMe);
     setSessionToken(token);
     setCurrentAdmin(admin || null);
   }
@@ -2059,7 +2144,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
+        body: JSON.stringify({ email: loginEmail, password: loginPassword, remember: rememberMe })
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "로그인에 실패했습니다.");
@@ -2095,11 +2180,11 @@ export default function AdminPage() {
   }
 
   async function logoutAdmin() {
-    localStorage.removeItem("e-evaluation-admin-session");
-    localStorage.removeItem("e-evaluation-admin-user");
+    clearStoredAdminSession();
     setSessionToken("");
     setCurrentAdmin(null);
     setData(null);
+    setResponsesByPeriod({});
     setMessage("로그아웃했습니다.");
   }
 
@@ -4795,6 +4880,15 @@ export default function AdminPage() {
           <div className="form-row">
             <label className="label">비밀번호</label>
             <input className="input" type="password" value={loginPassword} onChange={(e) => setLoginPassword(e.target.value)} placeholder="비밀번호" onKeyDown={(e) => { if (e.key === "Enter") loginAdmin(); }} />
+          </div>
+          <div className="form-row">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+              <span>자동 로그인 (이 기기에서 창을 닫아도 로그인 유지)</span>
+            </label>
+            <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+              체크하지 않으면 창을 닫을 때 자동 로그아웃되어, 새 창에서는 다시 로그인해야 합니다. 공용 PC에서는 체크하지 마세요.
+            </p>
           </div>
           <div className="form-row">
             <button className="btn full" onClick={loginAdmin}>로그인</button>

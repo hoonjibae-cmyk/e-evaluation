@@ -25,7 +25,7 @@ async function writeLoginLog(supabase: any, row: any) {
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password } = await request.json();
+    const { email, password, remember } = await request.json();
     const normalizedEmail = normalizeEmail(email);
 
     if (!normalizedEmail || !password) {
@@ -121,12 +121,14 @@ export async function POST(request: NextRequest) {
       user_agent: userAgent
     });
 
+    // 자동 로그인(remember) 시 더 오래 유지되는 토큰을 발급합니다. (기본 30일, 환경변수로 조정 가능)
+    const rememberHours = Number(process.env.ADMIN_REMEMBER_HOURS || 24 * 30);
     const token = createAdminSessionToken({
       id: admin.id,
       email: admin.email,
       name: admin.name,
       role: admin.role
-    });
+    }, remember ? rememberHours : undefined);
 
     return NextResponse.json({
       ok: true,

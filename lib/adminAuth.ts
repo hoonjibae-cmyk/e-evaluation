@@ -96,15 +96,16 @@ export function createAdminSessionToken(admin: {
   email: string;
   name: string;
   role: AdminRole;
-}) {
+}, ttlHours?: number) {
   const now = Math.floor(Date.now() / 1000);
+  const hours = Number.isFinite(ttlHours as number) && (ttlHours as number) > 0 ? (ttlHours as number) : SESSION_HOURS;
   const payload: AdminSession = {
     adminId: admin.id,
     email: admin.email,
     name: admin.name,
     role: admin.role,
     iat: now,
-    exp: now + SESSION_HOURS * 60 * 60
+    exp: now + hours * 60 * 60
   };
 
   const encoded = base64Url(JSON.stringify(payload));
