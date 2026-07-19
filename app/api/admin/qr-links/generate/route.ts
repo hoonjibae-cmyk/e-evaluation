@@ -21,37 +21,45 @@ export async function POST(request: NextRequest) {
 
     const assignmentsRes = await supabase
       .from("teacher_class_assignments")
-      .select("*")
+      .select("teacher_id, class_id")
       .eq("evaluation_period_id", evaluationPeriodId)
       .eq("is_active", true);
 
     if (assignmentsRes.error) throw assignmentsRes.error;
+    const assignments = assignmentsRes.data || [];
+
+    // 이미 존재하는 QR을 한 번에 조회 (배정 건마다 개별 조회하던 N+1 제거)
+    const existingRes = await supabase
+      .from("teacher_qr_links")
+      .select("teacher_id, class_id")
+      .eq("evaluation_period_id", evaluationPeriodId);
+    if (existingRes.error) throw existingRes.error;
+
+    const keyOf = (teacherId: any, classId: any) => `${teacherId || ""}|${classId || ""}`;
+    const existingKeys = new Set((existingRes.data || []).map((row: any) => keyOf(row.teacher_id, row.class_id)));
+
+    // 아직 없는 배정만 골라 한 번의 insert로 일괄 생성
+    const seen = new Set<string>();
+    const toInsert: any[] = [];
+    for (const assignment of assignments) {
+      const key = keyOf(assignment.teacher_id, assignment.class_id);
+      if (existingKeys.has(key) || seen.has(key)) continue;
+      seen.add(key);
+      toInsert.push({
+        evaluation_period_id: evaluationPeriodId,
+        teacher_id: assignment.teacher_id,
+        class_id: assignment.class_id,
+        link_scope: "teacher_class",
+        title: "강의평가 QR",
+        is_active: true
+      });
+    }
 
     let created = 0;
-
-    for (const assignment of assignmentsRes.data || []) {
-      const existing = await supabase
-        .from("teacher_qr_links")
-        .select("id")
-        .eq("evaluation_period_id", evaluationPeriodId)
-        .eq("teacher_id", assignment.teacher_id)
-        .eq("class_id", assignment.class_id)
-        .maybeSingle();
-
-      if (existing.error) throw existing.error;
-
-      if (!existing.data) {
-        const insertRes = await supabase.from("teacher_qr_links").insert({
-          evaluation_period_id: evaluationPeriodId,
-          teacher_id: assignment.teacher_id,
-          class_id: assignment.class_id,
-          link_scope: "teacher_class",
-          title: "강의평가 QR",
-          is_active: true
-        });
-        if (insertRes.error) throw insertRes.error;
-        created += 1;
-      }
+    if (toInsert.length) {
+      const insertRes = await supabase.from("teacher_qr_links").insert(toInsert).select("id");
+      if (insertRes.error) throw insertRes.error;
+      created = insertRes.data?.length || toInsert.length;
     }
 
     return NextResponse.json({ ok: true, created });

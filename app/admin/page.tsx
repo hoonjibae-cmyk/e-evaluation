@@ -1842,18 +1842,8 @@ export default function AdminPage() {
     return () => window.clearTimeout(timer);
   }, [message, hasActiveStatusOperation]);
 
-  useEffect(() => {
-    async function makeQrImages() {
-      if (!data?.qrLinks?.length) return;
-      const entries: Record<string, string> = {};
-      for (const link of data.qrLinks) {
-        const url = `${appUrl}/s/${link.token}`;
-        entries[link.id] = await QRCode.toDataURL(url, { width: 420, margin: 1 });
-      }
-      setQrImages(entries);
-    }
-    makeQrImages();
-  }, [data?.qrLinks, appUrl]);
+  // QR 이미지는 실제 화면에 보이는(선택 평가월·필터 적용된) QR만 생성합니다.
+  // 효과 본문은 displayedQrLinks 정의 이후로 이동했습니다.
 
   const currentPeriod = useMemo(() => {
     if (!data?.periods?.length) return null;
@@ -4194,6 +4184,30 @@ export default function AdminPage() {
       .filter((link: any) => qrTeacherFilter === "all" || link.teacher_id === qrTeacherFilter)
       .filter((link: any) => qrClassFilter === "all" || link.class_id === qrClassFilter);
   }, [data, selectedQrPeriod, qrTeacherFilter, qrClassFilter]);
+
+  // 화면에 보이는 QR만 이미지로 생성하고, 이미 만든 것은 재사용해 재인코딩을 피합니다.
+  useEffect(() => {
+    let cancelled = false;
+    async function makeQrImages() {
+      const links = displayedQrLinks || [];
+      if (!links.length) return;
+      const generated: Record<string, string> = {};
+      for (const link of links) {
+        if (qrImages[link.id]) continue; // 이미 생성됨 → 재사용
+        const url = `${appUrl}/s/${link.token}`;
+        generated[link.id] = await QRCode.toDataURL(url, { width: 420, margin: 1 });
+        if (cancelled) return;
+      }
+      if (!cancelled && Object.keys(generated).length) {
+        setQrImages((prev) => ({ ...prev, ...generated }));
+      }
+    }
+    makeQrImages();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [displayedQrLinks, appUrl]);
 
   // QR 필터용 옵션 (선택 평가월 기준)
   const qrFilterOptions = useMemo(() => {

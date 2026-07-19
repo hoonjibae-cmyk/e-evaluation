@@ -30,7 +30,8 @@ export async function GET(request: NextRequest) {
       responseImportErrorsRes,
       adminProfilesRes,
       adminLoginLogsRes,
-      actionLogsRes
+      actionLogsRes,
+      classMappingsRes
     ] = await Promise.all([
       supabase.from("evaluation_periods").select("*").order("year_month", { ascending: false }),
       supabase.from("teachers").select("*").order("is_active", { ascending: false }).order("name"),
@@ -78,13 +79,12 @@ export async function GET(request: NextRequest) {
         .from("action_logs")
         .select("*, admin_profiles:actor_admin_id(id, name, email, role)")
         .order("created_at", { ascending: false })
-        .limit(120)
+        .limit(120),
+      supabase
+        .from("class_name_mappings")
+        .select("*, from_class:classes!class_name_mappings_from_class_id_fkey(*), to_class:classes!class_name_mappings_to_class_id_fkey(*)")
+        .order("created_at", { ascending: false })
     ]);
-
-    const classMappingsRes = await supabase
-      .from("class_name_mappings")
-      .select("*, from_class:classes!class_name_mappings_from_class_id_fkey(*), to_class:classes!class_name_mappings_to_class_id_fkey(*)")
-      .order("created_at", { ascending: false });
 
     const classMappingsError = classMappingsRes.error
       ? String(classMappingsRes.error.message || "").toLowerCase().includes("class_name_mappings")
