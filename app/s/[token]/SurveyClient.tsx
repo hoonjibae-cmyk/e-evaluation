@@ -22,16 +22,8 @@ export default function SurveyClient({ token }: { token: string }) {
   const [complete, setComplete] = useState<any>(null);
   const [error, setError] = useState("");
 
-  const storageKey = `e-evaluation-submitted-${token}`;
-
   useEffect(() => {
-    const saved = localStorage.getItem(storageKey);
-    if (saved) {
-      setComplete(JSON.parse(saved));
-      setLoading(false);
-      return;
-    }
-
+    // 같은 기기 재접근 차단을 제거했습니다. (핸드폰을 빌려 여러 학생이 제출하는 경우를 위해)
     async function loadSurvey() {
       try {
         const res = await fetch(`/api/survey/${token}`);
@@ -46,7 +38,16 @@ export default function SurveyClient({ token }: { token: string }) {
     }
 
     loadSurvey();
-  }, [token, storageKey]);
+  }, [token]);
+
+  function startNextStudent() {
+    // 빌린 기기에서 다음 학생이 이어서 제출할 수 있도록 입력값을 초기화합니다.
+    setComplete(null);
+    setStudentName("");
+    setAnswers({});
+    setAgree(false);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+  }
 
   const teacherName = survey?.teacher?.name || "";
   const className = survey?.classItem?.name || "";
@@ -109,7 +110,6 @@ export default function SurveyClient({ token }: { token: string }) {
       });
       const body = await res.json();
       if (!res.ok) throw new Error(body.error || "제출에 실패했습니다.");
-      localStorage.setItem(storageKey, JSON.stringify(body.complete));
       setComplete(body.complete);
     } catch (err: any) {
       alert(err.message);
@@ -152,6 +152,12 @@ export default function SurveyClient({ token }: { token: string }) {
             <b>제출 시간</b><br />{new Date(complete.submittedAt).toLocaleString("ko-KR")}
           </div>
           <p className="muted">이 화면을 관리자에게 보여주세요.</p>
+          <button className="btn secondary full" style={{ marginTop: 18 }} onClick={startNextStudent}>
+            다른 학생 제출하기
+          </button>
+          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+            핸드폰을 빌려서 이어서 제출하는 경우, 이 버튼을 눌러 다음 학생 설문을 시작하세요.
+          </p>
         </div>
       </main>
     );

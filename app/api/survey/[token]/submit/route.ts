@@ -55,8 +55,11 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     if (duplicateRes.error) throw duplicateRes.error;
 
+    // 같은 기기(device_key) 기준 중복 의심은 제거했습니다.
+    // (핸드폰을 빌려 여러 학생이 제출하는 경우 정상 제출이 모두 중복으로 잡히던 문제)
+    // 같은 이름 재제출만 중복 의심으로 남겨 둡니다.
     const duplicateSuspected = (duplicateRes.data || []).some((row: any) => {
-      return row.student_name === studentName || (deviceKey && row.device_key === deviceKey);
+      return row.student_name === studentName;
     });
 
     const pressureAnswer = answers["pressure_or_reward"];
