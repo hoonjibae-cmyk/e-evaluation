@@ -7830,9 +7830,25 @@ function TeacherReport({
                                 />
                               </div>
                               <div className="trend-month">{monthLabel(p.year_month)}</div>
-                              {monthName !== groupHeaderName && (
-                                <div style={{ marginTop: 2, fontSize: 10, fontWeight: 800, color: "#475569", lineHeight: 1.15, wordBreak: "keep-all" }}>{monthName}</div>
-                              )}
+                              {/* 월별 반 이름 줄을 모든 열에 동일하게 예약해(다를 때만 보이게) 막대 기준선이 어긋나지 않게 함 */}
+                              <div
+                                aria-hidden={monthName === groupHeaderName}
+                                title={monthName}
+                                style={{
+                                  visibility: monthName !== groupHeaderName ? "visible" : "hidden",
+                                  marginTop: 2,
+                                  fontSize: 10,
+                                  fontWeight: 800,
+                                  color: "#475569",
+                                  lineHeight: 1.15,
+                                  whiteSpace: "nowrap",
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  maxWidth: "100%"
+                                }}
+                              >
+                                {monthName !== groupHeaderName ? monthName : groupHeaderName}
+                              </div>
                             </div>
                           );
                         })}
