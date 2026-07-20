@@ -2082,54 +2082,26 @@ export default function AdminPage() {
       setMessage("데이터를 불러오는 중입니다.");
       const body = await api("/api/admin/bootstrap");
       setData(body);
-      // 이미 보고 있던 평가월의 응답은 최신으로 갱신합니다(설문 진행 중 실시간 제출 반영).
-      await refreshLoadedResponses();
       setMessage("데이터를 불러왔습니다.");
     } catch (error: any) {
       setMessage(error.message);
     }
   }
 
-  // 특정 평가월의 응답(답변 포함)을 서버에서 받아 캐시에 넣고, 그 배열을 반환합니다.
-  async function fetchPeriodResponses(periodId: string, options: { force?: boolean } = {}): Promise<any[]> {
+  // (호환용) 응답은 부트스트랩에 포함되므로, 특정 평가월 응답이 필요하면 data.responses에서 바로 거릅니다.
+  async function fetchPeriodResponses(periodId: string): Promise<any[]> {
     if (!periodId) return [];
-    if (!options.force && responsesByPeriod[periodId]) return responsesByPeriod[periodId];
-    if (!options.force && responsesLoadingRef.current[periodId]) return responsesByPeriod[periodId] || [];
-    responsesLoadingRef.current[periodId] = true;
-    try {
-      const body = await api(`/api/admin/responses?periodId=${encodeURIComponent(periodId)}`);
-      const rows = body?.responses || [];
-      setResponsesByPeriod((prev) => ({ ...prev, [periodId]: rows }));
-      return rows;
-    } catch {
-      return responsesByPeriod[periodId] || [];
-    } finally {
-      responsesLoadingRef.current[periodId] = false;
-    }
+    return (data?.responses || []).filter((r: any) => r.evaluation_period_id === periodId);
   }
 
-  // 캐시에 없으면 로드만 트리거(반환값 불필요한 호출용).
-  function ensureResponses(periodId?: string | null) {
-    if (!periodId) return;
-    if (responsesByPeriod[periodId] || responsesLoadingRef.current[periodId]) return;
-    void fetchPeriodResponses(periodId);
-  }
+  // 응답은 부트스트랩에 포함되므로 별도 로드/갱신이 필요 없습니다. (호환용 no-op)
+  function ensureResponses(_periodId?: string | null) {}
 
-  // 응답이 바뀌는 작업(숨김/복구/업로드/롤백) 후, 이미 로드된 평가월 캐시를 갱신합니다.
-  async function refreshLoadedResponses(extraPeriodId?: string | null) {
-    const ids = new Set(Object.keys(responsesByPeriod));
-    if (extraPeriodId) ids.add(extraPeriodId);
-    await Promise.all(Array.from(ids).map((id) => fetchPeriodResponses(id, { force: true })));
-  }
+  async function refreshLoadedResponses(_extraPeriodId?: string | null) {}
 
-  // 결과지 생성 전, 해당 평가월 응답(서술형 코멘트 포함)이 로드됐는지 보장합니다.
-  // 아직 없으면 로드만 트리거하고 false를 반환해, 미리보기 갱신 후 다시 실행하도록 안내합니다.
-  async function ensureReportPeriodLoaded(period: any): Promise<boolean> {
-    if (!period?.id) return true;
-    if (responsesByPeriod[period.id]) return true;
-    await fetchPeriodResponses(period.id);
-    setMessage("응답 데이터를 불러왔습니다. 결과지 미리보기(서술형 코멘트 포함)가 갱신되면 다시 실행해주세요.");
-    return false;
+  // 응답은 부트스트랩(data.responses)에 서술형 코멘트까지 포함되므로 항상 준비 상태입니다.
+  async function ensureReportPeriodLoaded(_period: any): Promise<boolean> {
+    return true;
   }
 
   function saveSession(token: string, admin: any) {
@@ -4044,8 +4016,8 @@ export default function AdminPage() {
     return rows.length ? rows : activeClasses;
   }, [data, activeClasses, selectedTeacher, selectedTeacherId]);
 
-  // 지연 로드된 평가월 응답들을 한 배열로 합칩니다. (기존 data.responses 대체)
-  const allResponses = useMemo(() => Object.values(responsesByPeriod).flat(), [responsesByPeriod]);
+  // 응답은 부트스트랩에서 직접 로드합니다. (지연 로드는 집계와 어긋나 0건/코멘트 누락 문제를 일으켜 되돌림)
+  const allResponses = useMemo(() => (data?.responses || []), [data]);
 
   const visibleResponses = useMemo(() => allResponses.filter((r: any) => r.is_hidden !== true), [allResponses]);
   const hiddenResponses = useMemo(() => allResponses.filter((r: any) => r.is_hidden === true), [allResponses]);
@@ -4240,33 +4212,6 @@ export default function AdminPage() {
     return data.periods.find((p: any) => p.id === backupPeriodId) || currentPeriod || data.periods[0];
   }, [data, backupPeriodId, currentPeriod]);
 
-  // 화면에서 실제로 참조하는 평가월의 응답만 지연 로드합니다. (전체 기간 응답을 부트스트랩에서 제거)
-  useEffect(() => {
-    [
-      currentPeriod?.id,
-      homePeriod?.id,
-      selectedReportPeriod?.id,
-      selectedSafetyPeriod?.id,
-      selectedDeletePeriod?.id,
-      backupPeriod?.id
-    ].forEach((id) => ensureResponses(id));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentPeriod, homePeriod, selectedReportPeriod, selectedSafetyPeriod, selectedDeletePeriod, backupPeriod]);
-
-  // 응답 건수를 보여주는 탭(홈/결과분석/제출현황/운영안전)을 보고 있을 때는, 해당 평가월 응답을
-  // 항상 최신으로 강제 갱신합니다. (설문 진행 중 실시간 제출이 결과분석과 어긋나 0건으로 보이던 문제 수정)
-  useEffect(() => {
-    const responseTabs = ["home", "results", "responses", "safety"];
-    if (!responseTabs.includes(tab)) return;
-    const periodId =
-      tab === "safety"
-        ? selectedSafetyPeriod?.id
-        : tab === "home"
-        ? homePeriod?.id
-        : selectedReportPeriod?.id || currentPeriod?.id;
-    if (periodId) void fetchPeriodResponses(periodId, { force: true });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tab, homePeriod, selectedReportPeriod, selectedSafetyPeriod, currentPeriod, data]);
 
   const assignmentDefaults = useMemo(() => {
     const period = selectedAssignmentPeriod;
