@@ -4253,6 +4253,21 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPeriod, homePeriod, selectedReportPeriod, selectedSafetyPeriod, selectedDeletePeriod, backupPeriod]);
 
+  // 응답 건수를 보여주는 탭(홈/결과분석/제출현황/운영안전)을 보고 있을 때는, 해당 평가월 응답을
+  // 항상 최신으로 강제 갱신합니다. (설문 진행 중 실시간 제출이 결과분석과 어긋나 0건으로 보이던 문제 수정)
+  useEffect(() => {
+    const responseTabs = ["home", "results", "responses", "safety"];
+    if (!responseTabs.includes(tab)) return;
+    const periodId =
+      tab === "safety"
+        ? selectedSafetyPeriod?.id
+        : tab === "home"
+        ? homePeriod?.id
+        : selectedReportPeriod?.id || currentPeriod?.id;
+    if (periodId) void fetchPeriodResponses(periodId, { force: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, homePeriod, selectedReportPeriod, selectedSafetyPeriod, currentPeriod, data]);
+
   const assignmentDefaults = useMemo(() => {
     const period = selectedAssignmentPeriod;
     const teacherId = assignmentForm.teacher_id || activeTeachers[0]?.id || "";
@@ -4333,6 +4348,16 @@ export default function AdminPage() {
     }
     return map;
   }, [data]);
+
+  // 응답의 반 이름: 해당 평가월 배정의 표시 이름(class_display_name)이 있으면 그것을 사용합니다.
+  function responseClassName(response: any) {
+    if (!response) return "반 미지정";
+    return (
+      classDisplayNames.get(`${response.evaluation_period_id}|${response.teacher_id}|${response.class_id}`) ||
+      response.classes?.name ||
+      "반 미지정"
+    );
+  }
 
   const displayedQrLinks = useMemo(() => {
     const periodId = selectedQrPeriod?.id;
@@ -6028,7 +6053,7 @@ export default function AdminPage() {
                         <td>{response.is_hidden ? <span className="badge danger">숨김</span> : <span className="badge ok">반영중</span>}</td>
                         <td><b>{response.student_name}</b></td>
                         <td>{response.teachers?.name || "-"} 선생님</td>
-                        <td>{response.classes?.name || "반 미지정"}</td>
+                        <td>{responseClassName(response)}</td>
                         <td>{formatDateTime(response.submitted_at)}</td>
                         <td>{response.hidden_reason || "-"}</td>
                         <td>
@@ -6619,7 +6644,7 @@ export default function AdminPage() {
                       <tr key={r.id}>
                         <td><b>{r.student_name}</b></td>
                         <td>{r.teachers?.name} 선생님</td>
-                        <td>{r.classes?.name || "반 미지정"}</td>
+                        <td>{responseClassName(r)}</td>
                         <td>{formatDateTime(r.submitted_at)}</td>
                         <td><ResponseStatusBadges response={r} /></td>
                         <td><button className="btn secondary" onClick={() => setSelectedResponseId(r.id)}>상세</button></td>
@@ -6637,7 +6662,7 @@ export default function AdminPage() {
                   <div>
                     <h2 className="h2">응답 상세</h2>
                     <p className="muted">
-                      {selectedResponse.student_name} 학생 · {selectedResponse.teachers?.name} 선생님 · {selectedResponse.classes?.name || "반 미지정"} · {formatDateTime(selectedResponse.submitted_at)}
+                      {selectedResponse.student_name} 학생 · {selectedResponse.teachers?.name} 선생님 · {responseClassName(selectedResponse)} · {formatDateTime(selectedResponse.submitted_at)}
                     </p>
                   </div>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

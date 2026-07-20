@@ -98,6 +98,22 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     const answersInsertRes = await supabase.from("evaluation_answers").insert(answerRows);
     if (answersInsertRes.error) throw answersInsertRes.error;
 
+    // 이 평가월 배정에 설정된 표시 이름(class_display_name)이 있으면 그 이름을 반 이름으로 사용합니다.
+    // (반 이름을 변경한 뒤 제출했는데 이전 이름으로 보이던 문제 수정 — 설문 화면과 동일한 규칙)
+    let className = qr.classes?.name || "";
+    if (qr.evaluation_period_id && qr.teacher_id && qr.class_id) {
+      const asgRes = await supabase
+        .from("teacher_class_assignments")
+        .select("class_display_name")
+        .eq("evaluation_period_id", qr.evaluation_period_id)
+        .eq("teacher_id", qr.teacher_id)
+        .eq("class_id", qr.class_id)
+        .maybeSingle();
+      if (!asgRes.error && asgRes.data?.class_display_name) {
+        className = asgRes.data.class_display_name;
+      }
+    }
+
     const countRes = await supabase
       .from("evaluation_responses")
       .select("id", { count: "exact", head: true })
@@ -113,7 +129,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       complete: {
         studentName,
         teacherName: qr.teachers?.name || "",
-        className: qr.classes?.name || "",
+        className,
         submittedAt: responseRes.data.submitted_at
       }
     });
