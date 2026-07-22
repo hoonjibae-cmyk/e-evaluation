@@ -3647,6 +3647,28 @@ export default function AdminPage() {
     );
   }
 
+  // 중복 의심 검토용: 사유 프롬프트 없이 단일 확인으로 빠르게 숨김/복구합니다.
+  async function hideDuplicateResponse(response: any) {
+    const ok = window.confirm(
+      `이 응답(${response.student_name || "학생"} · ${formatDateTime(response.submitted_at)})을 숨김 처리할까요?\n` +
+        `리포트 집계·결과 분석에서 제외됩니다. 원본은 삭제되지 않고 운영 안전 탭에서 복구할 수 있습니다.`
+    );
+    if (!ok) return;
+    await runSafetyAction(
+      { action: "hide_response", responseId: response.id, reason: "중복 의심 응답 검토 후 제외(초 단위 재제출)" },
+      "중복 의심 응답을 숨김 처리했습니다. 리포트 집계에서 제외됩니다."
+    );
+  }
+
+  async function restoreDuplicateResponse(response: any) {
+    const ok = window.confirm(`이 응답(${response.student_name || "학생"} · ${formatDateTime(response.submitted_at)})의 숨김을 해제할까요?`);
+    if (!ok) return;
+    await runSafetyAction(
+      { action: "restore_response", responseId: response.id, reason: "중복 의심 검토 후 복구" },
+      "응답 숨김을 해제했습니다."
+    );
+  }
+
 
   function requiredDeletePhrase(period: any) {
     return period?.title ? `${period.title} 영구 삭제` : "";
@@ -4451,6 +4473,28 @@ export default function AdminPage() {
       duplicate: periodResponses.filter((r: any) => r.is_duplicate_suspected).length
     };
   }, [periodResponses]);
+
+  // 중복 의심 검토: 같은 평가월·선생님·반·학생명으로 2건 이상 제출된 그룹을 제출 시각(초 단위) 순으로 묶습니다.
+  // (숨김 응답까지 포함해 보여주므로, 검토 후 하나만 남기고 나머지를 숨기거나 복구할 수 있습니다.)
+  const duplicateReviewGroups = useMemo(() => {
+    const periodId = selectedReportPeriod?.id || currentPeriod?.id;
+    const rows = allResponses.filter((r: any) => !periodId || r.evaluation_period_id === periodId);
+    const map = new Map<string, any[]>();
+    for (const r of rows) {
+      const name = String(r.student_name || "").trim();
+      if (!name) continue;
+      const key = `${r.teacher_id}|${r.class_id}|${name}`;
+      const arr = map.get(key) || [];
+      arr.push(r);
+      map.set(key, arr);
+    }
+    return Array.from(map.values())
+      .filter((group) => group.length > 1)
+      .map((group) =>
+        group.slice().sort((a: any, b: any) => new Date(a.submitted_at || 0).getTime() - new Date(b.submitted_at || 0).getTime())
+      )
+      .sort((a, b) => new Date(b[b.length - 1].submitted_at || 0).getTime() - new Date(a[a.length - 1].submitted_at || 0).getTime());
+  }, [allResponses, selectedReportPeriod, currentPeriod]);
 
   const responseSummaryRows = useMemo(() => {
     const periodId = selectedReportPeriod?.id || currentPeriod?.id;
@@ -6489,6 +6533,54 @@ export default function AdminPage() {
               <Stat label="검토 필요" value={`${responseStats.flagged}건`} />
               <Stat label="중복 의심" value={`${responseStats.duplicate}건`} />
             </div>
+
+            {duplicateReviewGroups.length > 0 && (
+              <div className="card no-print" style={{ marginTop: 18, border: "1px solid #f1c4c4", background: "var(--surface-muted, #fdf5f5)" }}>
+                <h2 className="h2">중복 의심 검토 ({duplicateReviewGroups.length}명)</h2>
+                <p className="muted small">
+                  같은 반·같은 이름으로 2건 이상 제출된 응답입니다. <b>제출 시각(초 단위)</b>과 간격을 보고, 몇 초 사이의 중복 제출은
+                  하나만 남기고 나머지를 <b>숨김</b> 처리하세요. 숨긴 응답은 리포트 집계·결과 분석에서 제외됩니다. (원본은 삭제되지 않으며 복구 가능)
+                </p>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 12 }}>
+                  {duplicateReviewGroups.map((group: any[], gi: number) => (
+                    <div key={gi} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, background: "#fff" }}>
+                      <div style={{ fontWeight: 700, marginBottom: 8 }}>
+                        {group[0].teachers?.name || "선생님"} 선생님 · {responseClassName(group[0])} · {group[0].student_name} — {group.length}건 제출
+                      </div>
+                      <div className="table-wrap">
+                        <table>
+                          <thead>
+                            <tr><th>제출 시각(초까지)</th><th>직전 제출과 간격</th><th>상태</th><th>기능</th></tr>
+                          </thead>
+                          <tbody>
+                            {group.map((r: any, ri: number) => {
+                              const prev = ri > 0 ? group[ri - 1] : null;
+                              const gapSec = prev
+                                ? Math.round((new Date(r.submitted_at || 0).getTime() - new Date(prev.submitted_at || 0).getTime()) / 1000)
+                                : null;
+                              return (
+                                <tr key={r.id}>
+                                  <td>{formatDateTime(r.submitted_at)}</td>
+                                  <td>{gapSec === null ? "-" : `${gapSec}초 후`}</td>
+                                  <td>{r.is_hidden ? <span className="badge danger">숨김(제외됨)</span> : <span className="badge ok">반영중</span>}</td>
+                                  <td>
+                                    {r.is_hidden ? (
+                                      <button className="btn secondary sm" onClick={() => restoreDuplicateResponse(r)}>표시</button>
+                                    ) : (
+                                      <button className="btn danger sm" onClick={() => hideDuplicateResponse(r)}>숨김</button>
+                                    )}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="h2">필터</h2>

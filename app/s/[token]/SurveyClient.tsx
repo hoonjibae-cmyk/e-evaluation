@@ -21,6 +21,7 @@ export default function SurveyClient({ token }: { token: string }) {
   const [answers, setAnswers] = useState<Record<string, any>>({});
   const [complete, setComplete] = useState<any>(null);
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     // 같은 기기 재접근 차단을 제거했습니다. (핸드폰을 빌려 여러 학생이 제출하는 경우를 위해)
@@ -89,6 +90,9 @@ export default function SurveyClient({ token }: { token: string }) {
   }
 
   async function submit() {
+    // 이중 제출 방지: 이미 제출 중이면 무시합니다. (버튼이 안 눌린 줄 알고 다시 눌러 중복 제출되던 문제)
+    if (submitting) return;
+
     const validationError = validate();
     if (validationError) {
       alert(validationError);
@@ -99,6 +103,7 @@ export default function SurveyClient({ token }: { token: string }) {
       return;
     }
 
+    setSubmitting(true);
     try {
       const deviceKey = localStorage.getItem("e-evaluation-device-key") || crypto.randomUUID();
       localStorage.setItem("e-evaluation-device-key", deviceKey);
@@ -113,6 +118,7 @@ export default function SurveyClient({ token }: { token: string }) {
       setComplete(body.complete);
     } catch (err: any) {
       alert(err.message);
+      setSubmitting(false); // 실패 시 재시도할 수 있도록 잠금 해제 (성공 시엔 완료 화면으로 전환)
     }
   }
 
@@ -250,7 +256,9 @@ export default function SurveyClient({ token }: { token: string }) {
         ))}
 
         <div className="form-row">
-          <button className="btn full" onClick={submit}>제출하기</button>
+          <button className="btn full" onClick={submit} disabled={submitting}>
+            {submitting ? "제출 중… 잠시만 기다려주세요" : "제출하기"}
+          </button>
         </div>
       </div>
     </main>
