@@ -104,6 +104,11 @@ export default function SurveyClient({ token }: { token: string }) {
     }
 
     setSubmitting(true);
+
+    // 네트워크 순단·동시접속 지연 등으로 응답이 안 오면 무한 대기(=제출 중 멈춤)하지 않도록 타임아웃을 둡니다.
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 25000);
+
     try {
       const deviceKey = localStorage.getItem("e-evaluation-device-key") || crypto.randomUUID();
       localStorage.setItem("e-evaluation-device-key", deviceKey);
@@ -111,14 +116,22 @@ export default function SurveyClient({ token }: { token: string }) {
       const res = await fetch(`/api/survey/${token}/submit`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ studentName: studentName.trim(), answers, deviceKey })
+        body: JSON.stringify({ studentName: studentName.trim(), answers, deviceKey }),
+        signal: controller.signal
       });
-      const body = await res.json();
+      const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "제출에 실패했습니다.");
       setComplete(body.complete);
     } catch (err: any) {
-      alert(err.message);
+      const aborted = err?.name === "AbortError";
+      alert(
+        aborted
+          ? "네트워크가 불안정해 제출 응답이 지연되고 있습니다.\n인터넷(와이파이/데이터) 상태를 확인한 뒤 '제출하기'를 다시 눌러주세요.\n(만약 이미 제출됐다면 관리자에게 확인해주세요.)"
+          : (err?.message || "제출에 실패했습니다. 잠시 후 다시 시도해주세요.")
+      );
       setSubmitting(false); // 실패 시 재시도할 수 있도록 잠금 해제 (성공 시엔 완료 화면으로 전환)
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
