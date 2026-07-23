@@ -7881,10 +7881,12 @@ function TeacherReport({
                                   whiteSpace: "nowrap",
                                   overflow: "hidden",
                                   textOverflow: "ellipsis",
-                                  maxWidth: "100%"
+                                  width: "100%",
+                                  boxSizing: "border-box",
+                                  textAlign: "center"
                                 }}
                               >
-                                {monthName !== groupHeaderName ? monthName : groupHeaderName}
+                                {monthName !== groupHeaderName ? monthName : " "}
                               </div>
                             </div>
                           );
