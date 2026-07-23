@@ -516,7 +516,7 @@ function reportSnapshotCss() {
     .trend-chart { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4mm; align-items:flex-end; }
     .trend-group { min-width:0; break-inside: avoid; page-break-inside: avoid; }
     .trend-bars { height: 92mm; display:flex; align-items:flex-end; justify-content:center; gap: 2mm; padding: 3mm 2mm 2mm; border: 1px solid #eef2f7; border-radius: 3mm; background: linear-gradient(to top, rgba(148, 163, 184, 0.28) 1px, transparent 1px); background-size: 100% 25%; }
-    .trend-bar-column { flex:1; max-width: 13mm; height:100%; display:flex; flex-direction:column; align-items:center; }
+    .trend-bar-column { flex:1; min-width:0; max-width: 13mm; height:100%; display:flex; flex-direction:column; align-items:center; }
     .trend-value { min-height: 5mm; margin-bottom: 1mm; font-size: 8pt; font-weight:900; color:#334155; }
     .trend-bar-shell { width:100%; flex:1; display:flex; align-items:flex-end; justify-content:center; }
     .trend-bar { width:100%; min-height: 1mm; border-radius: 2mm 2mm 0.5mm 0.5mm; }
@@ -590,7 +590,7 @@ function reportSnapshotCss() {
     .report-page-score .designed-trend-card .trend-chart { margin-left:0; }
     .report-page-score .trend-chart { grid-template-columns:repeat(var(--trend-columns), minmax(0,1fr)); gap:2mm; align-items:end; }
     .report-page-score .trend-bars { height:var(--trend-bar-height); padding:1.6mm 1mm 1mm; gap:1mm; border-radius:2mm; }
-    .report-page-score .trend-bar-column { max-width:none; }
+    .report-page-score .trend-bar-column { max-width:none; min-width:0; }
     .report-page-score .trend-value { min-height:3.6mm; margin-bottom:.7mm; font-size:5.7pt; }
     .report-page-score .trend-month { margin-top:1mm; font-size:5.2pt; }
     .report-page-score .trend-class-name { margin-top:1.2mm; font-size:6.1pt; line-height:1.12; }
