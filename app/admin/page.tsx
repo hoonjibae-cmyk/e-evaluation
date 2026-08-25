@@ -1748,6 +1748,9 @@ export default function AdminPage() {
   const [responseClassFilter, setResponseClassFilter] = useState("all");
   const [responseStatusFilter, setResponseStatusFilter] = useState("all");
   const [selectedResponseId, setSelectedResponseId] = useState("");
+  const [selectedResponseIds, setSelectedResponseIds] = useState<string[]>([]);
+  const [bulkHideBusy, setBulkHideBusy] = useState(false);
+  const responseDetailRef = useRef<HTMLDivElement | null>(null);
   const [reportMode, setReportMode] = useState<"single" | "all">("single");
   const [reportMonthCount, setReportMonthCount] = useState<3 | 4>(3);
   const [reportTemplate, setReportTemplate] = useState<"teacher" | "summary" | "internal">("teacher");
@@ -1850,7 +1853,8 @@ export default function AdminPage() {
     || legacyUploadBusy
     || withdrawalBusy
     || assignmentSetupBusy
-    || closeMonthBusy;
+    || closeMonthBusy
+    || bulkHideBusy;
 
   const isInternalReportTemplate = reportTemplate === "internal";
 
@@ -3660,6 +3664,59 @@ export default function AdminPage() {
     );
   }
 
+  // 응답 목록 다중 선택: 관리자가 원하는 응답을 골라 집계에서 제외(숨김)할 수 있습니다.
+  function toggleResponseSelection(id: string) {
+    setSelectedResponseIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  }
+
+  function toggleAllFilteredResponses() {
+    const ids = filteredResponses.map((r: any) => r.id);
+    const allSelected = ids.length > 0 && ids.every((id: string) => selectedResponseIds.includes(id));
+    setSelectedResponseIds(allSelected ? [] : ids);
+  }
+
+  async function hideSelectedResponses() {
+    const ids = selectedResponseIds.filter(Boolean);
+    if (!ids.length) {
+      setMessage("먼저 제외할 응답을 선택해주세요.");
+      return;
+    }
+    const reason = window.prompt(`선택한 응답 ${ids.length}건을 집계에서 제외합니다. 사유를 입력해주세요.`, "관리자 검토 후 제외");
+    if (reason === null) return;
+    const ok = window.confirm(
+      `선택한 응답 ${ids.length}건을 숨김 처리할까요?\n\n` +
+        `· 결과 분석과 리포트 집계에서 제외됩니다.\n` +
+        `· 원본은 삭제되지 않으며, 운영 안전 탭에서 다시 복구할 수 있습니다.`
+    );
+    if (!ok) return;
+
+    try {
+      setBulkHideBusy(true);
+      setMessage(`선택한 응답 ${ids.length}건을 숨김 처리하는 중입니다. 완료될 때까지 이 창을 닫지 마세요.`);
+      let done = 0;
+      let failed = 0;
+      for (const id of ids) {
+        try {
+          await api("/api/admin/safety", {
+            method: "POST",
+            body: JSON.stringify({ action: "hide_response", responseId: id, reason })
+          });
+          done += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      setSelectedResponseIds([]);
+      setSelectedResponseId("");
+      await loadData();
+      setMessage(`숨김 처리 완료: 성공 ${done}건${failed ? `, 실패 ${failed}건` : ""}. 결과 분석과 리포트 집계에서 제외됩니다.`);
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setBulkHideBusy(false);
+    }
+  }
+
   async function restoreDuplicateResponse(response: any) {
     const ok = window.confirm(`이 응답(${response.student_name || "학생"} · ${formatDateTime(response.submitted_at)})의 숨김을 해제할까요?`);
     if (!ok) return;
@@ -4567,6 +4624,12 @@ export default function AdminPage() {
   const selectedResponse = useMemo(() => {
     return filteredResponses.find((response: any) => response.id === selectedResponseId) || null;
   }, [filteredResponses, selectedResponseId]);
+
+  // 상세 카드는 응답 목록 아래에 렌더링되므로, 상세를 누르면 화면에 보이도록 스크롤합니다.
+  useEffect(() => {
+    if (!selectedResponseId) return;
+    responseDetailRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [selectedResponseId]);
 
   const safetyPeriodResponses = useMemo(() => {
     const periodId = selectedSafetyPeriod?.id;
@@ -6663,11 +6726,54 @@ export default function AdminPage() {
 
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="h2">응답 목록</h2>
-              <p className="muted">상세 버튼을 누르면 학생이 남긴 답변과 검토 사유를 확인할 수 있습니다.</p>
+              <p className="muted">
+                상세 버튼을 누르면 학생이 남긴 답변과 검토 사유를 확인할 수 있습니다.
+                집계에서 빼고 싶은 응답은 왼쪽 체크박스로 선택한 뒤 <b>선택 응답 집계 제외</b>를 누르세요.
+              </p>
+
+              <div
+                className="no-print"
+                style={{
+                  marginTop: 12,
+                  padding: "10px 12px",
+                  border: "1px solid var(--line)",
+                  borderRadius: 10,
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  flexWrap: "wrap"
+                }}
+              >
+                <div className="muted small">
+                  {selectedResponseIds.length ? <b>{selectedResponseIds.length}건 선택됨</b> : "제외할 응답을 선택하세요."}
+                  {" "}숨김 처리한 응답은 결과 분석·리포트에서 제외되며, 운영 안전 탭에서 복구할 수 있습니다.
+                </div>
+                <div className="row-actions">
+                  <button className="btn secondary sm" onClick={toggleAllFilteredResponses} disabled={!filteredResponses.length}>
+                    {filteredResponses.length > 0 && filteredResponses.every((r: any) => selectedResponseIds.includes(r.id)) ? "전체 선택 해제" : "목록 전체 선택"}
+                  </button>
+                  <button className="btn secondary sm" onClick={() => setSelectedResponseIds([])} disabled={!selectedResponseIds.length}>
+                    선택 해제
+                  </button>
+                  <button className="btn danger sm" onClick={hideSelectedResponses} disabled={!selectedResponseIds.length || bulkHideBusy}>
+                    {bulkHideBusy ? "처리 중…" : `선택 응답 집계 제외${selectedResponseIds.length ? ` (${selectedResponseIds.length})` : ""}`}
+                  </button>
+                </div>
+              </div>
+
               <div className="table-wrap" style={{ marginTop: 16 }}>
                 <table>
                   <thead>
                     <tr>
+                      <th style={{ width: 40 }}>
+                        <input
+                          type="checkbox"
+                          aria-label="목록 전체 선택"
+                          checked={filteredResponses.length > 0 && filteredResponses.every((r: any) => selectedResponseIds.includes(r.id))}
+                          onChange={toggleAllFilteredResponses}
+                        />
+                      </th>
                       <th>제출자</th>
                       <th>선생님</th>
                       <th>반</th>
@@ -6679,6 +6785,14 @@ export default function AdminPage() {
                   <tbody>
                     {filteredResponses.map((r: any) => (
                       <tr key={r.id}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            aria-label={`${r.student_name} 응답 선택`}
+                            checked={selectedResponseIds.includes(r.id)}
+                            onChange={() => toggleResponseSelection(r.id)}
+                          />
+                        </td>
                         <td><b>{r.student_name}</b></td>
                         <td>{r.teachers?.name} 선생님</td>
                         <td>{responseClassName(r)}</td>
@@ -6694,7 +6808,7 @@ export default function AdminPage() {
             </div>
 
             {selectedResponse && (
-              <div className="card" style={{ marginTop: 18 }}>
+              <div className="card" ref={responseDetailRef} style={{ marginTop: 18 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
                   <div>
                     <h2 className="h2">응답 상세</h2>
