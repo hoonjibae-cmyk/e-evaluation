@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import QRCode from "qrcode";
 import { formatScore, maskTeacherName, monthLabel } from "@/lib/score";
 
@@ -1749,6 +1749,7 @@ export default function AdminPage() {
   const [responseStatusFilter, setResponseStatusFilter] = useState("all");
   const [selectedResponseId, setSelectedResponseId] = useState("");
   const [selectedResponseIds, setSelectedResponseIds] = useState<string[]>([]);
+  const [expandedDuplicateId, setExpandedDuplicateId] = useState<string>("");
   const [bulkHideBusy, setBulkHideBusy] = useState(false);
   const responseDetailRef = useRef<HTMLDivElement | null>(null);
   const [reportMode, setReportMode] = useState<"single" | "all">("single");
@@ -6613,7 +6614,7 @@ export default function AdminPage() {
                       <div className="table-wrap">
                         <table>
                           <thead>
-                            <tr><th>제출 시각(초까지)</th><th>직전 제출과 간격</th><th>상태</th><th>기능</th></tr>
+                            <tr><th>제출 시각(초까지)</th><th>직전 제출과 간격</th><th>상태</th><th>응답 내용</th><th>기능</th></tr>
                           </thead>
                           <tbody>
                             {group.map((r: any, ri: number) => {
@@ -6622,18 +6623,59 @@ export default function AdminPage() {
                                 ? Math.round((new Date(r.submitted_at || 0).getTime() - new Date(prev.submitted_at || 0).getTime()) / 1000)
                                 : null;
                               return (
-                                <tr key={r.id}>
-                                  <td>{formatDateTime(r.submitted_at)}</td>
-                                  <td>{gapSec === null ? "-" : `${gapSec}초 후`}</td>
-                                  <td>{r.is_hidden ? <span className="badge danger">숨김(제외됨)</span> : <span className="badge ok">반영중</span>}</td>
-                                  <td>
-                                    {r.is_hidden ? (
-                                      <button className="btn secondary sm" onClick={() => restoreDuplicateResponse(r)}>표시</button>
-                                    ) : (
-                                      <button className="btn danger sm" onClick={() => hideDuplicateResponse(r)}>숨김</button>
-                                    )}
-                                  </td>
-                                </tr>
+                                <Fragment key={r.id}>
+                                  <tr>
+                                    <td>{formatDateTime(r.submitted_at)}</td>
+                                    <td>{gapSec === null ? "-" : `${gapSec}초 후`}</td>
+                                    <td>{r.is_hidden ? <span className="badge danger">숨김(제외됨)</span> : <span className="badge ok">반영중</span>}</td>
+                                    <td>
+                                      <button
+                                        className="btn secondary sm"
+                                        onClick={() => setExpandedDuplicateId(expandedDuplicateId === r.id ? "" : r.id)}
+                                      >
+                                        {expandedDuplicateId === r.id ? "응답 접기" : "응답 보기"}
+                                      </button>
+                                    </td>
+                                    <td>
+                                      {r.is_hidden ? (
+                                        <button className="btn secondary sm" onClick={() => restoreDuplicateResponse(r)}>표시</button>
+                                      ) : (
+                                        <button className="btn danger sm" onClick={() => hideDuplicateResponse(r)}>숨김</button>
+                                      )}
+                                    </td>
+                                  </tr>
+                                  {expandedDuplicateId === r.id && (
+                                    <tr>
+                                      <td colSpan={5} style={{ background: "#fbfbfd" }}>
+                                        <div className="muted small" style={{ marginBottom: 8 }}>
+                                          {formatDateTime(r.submitted_at)} 제출 · {r.student_name} 학생
+                                          {r.is_hidden ? " · 현재 집계에서 제외된 응답입니다." : ""}
+                                        </div>
+                                        {getAnswers(r).length ? (
+                                          <div className="table-wrap">
+                                            <table>
+                                              <thead>
+                                                <tr><th style={{ width: "55%" }}>문항</th><th>답변</th></tr>
+                                              </thead>
+                                              <tbody>
+                                                {getAnswers(r)
+                                                  .sort((a: any, b: any) => Number(a.evaluation_questions?.display_order || 0) - Number(b.evaluation_questions?.display_order || 0))
+                                                  .map((answer: any) => (
+                                                    <tr key={answer.id}>
+                                                      <td>{String(answer.evaluation_questions?.title || "").replace("{teacher_name}", r.teachers?.name || "")}</td>
+                                                      <td>{answerDisplay(answer)}</td>
+                                                    </tr>
+                                                  ))}
+                                              </tbody>
+                                            </table>
+                                          </div>
+                                        ) : (
+                                          <p className="muted small" style={{ margin: 0 }}>표시할 답변 데이터가 없습니다.</p>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  )}
+                                </Fragment>
                               );
                             })}
                           </tbody>
