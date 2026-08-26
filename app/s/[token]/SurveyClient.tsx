@@ -22,6 +22,7 @@ export default function SurveyClient({ token }: { token: string }) {
   const [complete, setComplete] = useState<any>(null);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [staffConfirmed, setStaffConfirmed] = useState(false);
 
   useEffect(() => {
     // 같은 기기 재접근 차단을 제거했습니다. (핸드폰을 빌려 여러 학생이 제출하는 경우를 위해)
@@ -43,11 +44,52 @@ export default function SurveyClient({ token }: { token: string }) {
 
   function startNextStudent() {
     // 빌린 기기에서 다음 학생이 이어서 제출할 수 있도록 입력값을 초기화합니다.
+    setStaffConfirmed(false);
     setComplete(null);
     setStudentName("");
     setAnswers({});
     setAgree(false);
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
+  }
+
+  // 제출 완료 화면을 학원 관계자가 확인하기 전에 학생이 화면을 닫거나 넘기지 못하도록 막습니다.
+  useEffect(() => {
+    if (!complete || staffConfirmed) return;
+
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      event.preventDefault();
+      event.returnValue = "";
+      return "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+
+    // 뒤로가기(스와이프 포함) 시에도 관계자 확인 여부를 되묻습니다.
+    window.history.pushState({ surveyComplete: true }, "");
+    const onPopState = () => {
+      const leaving = window.confirm(
+        "학원 관계자에게 제출 완료 화면을 확인받으셨나요?\n\n" +
+          "아직 확인받지 않았다면 [취소]를 눌러 이 화면에 머물러 주세요.\n" +
+          "확인을 받지 않고 화면을 넘기면 다시 제출하게 되어 중복 응답이 생길 수 있습니다."
+      );
+      if (leaving) {
+        setStaffConfirmed(true);
+      } else {
+        window.history.pushState({ surveyComplete: true }, "");
+      }
+    };
+    window.addEventListener("popstate", onPopState);
+
+    return () => {
+      window.removeEventListener("beforeunload", onBeforeUnload);
+      window.removeEventListener("popstate", onPopState);
+    };
+  }, [complete, staffConfirmed]);
+
+  function confirmByStaff() {
+    const ok = window.confirm(
+      "학원 관계자가 이 제출 완료 화면을 확인하셨나요?\n\n확인을 받은 뒤에 눌러주세요."
+    );
+    if (ok) setStaffConfirmed(true);
   }
 
   const teacherName = survey?.teacher?.name || "";
@@ -170,13 +212,47 @@ export default function SurveyClient({ token }: { token: string }) {
             <b>반</b><br />{complete.className || "-"}<br /><br />
             <b>제출 시간</b><br />{new Date(complete.submittedAt).toLocaleString("ko-KR")}
           </div>
-          <p className="muted">이 화면을 관리자에게 보여주세요.</p>
-          <button className="btn secondary full" style={{ marginTop: 18 }} onClick={startNextStudent}>
-            다른 학생 제출하기
-          </button>
-          <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
-            핸드폰을 빌려서 이어서 제출하는 경우, 이 버튼을 눌러 다음 학생 설문을 시작하세요.
-          </p>
+          {!staffConfirmed ? (
+            <>
+              <div
+                style={{
+                  marginTop: 18,
+                  padding: "14px 16px",
+                  borderRadius: 12,
+                  border: "2px solid #dc2626",
+                  background: "#fef2f2",
+                  color: "#991b1b",
+                  fontWeight: 800,
+                  lineHeight: 1.5
+                }}
+              >
+                ⚠️ 학원 관계자가 확인하기 전까지<br />
+                이 화면을 끄거나 넘기지 마세요.
+                <div style={{ fontWeight: 600, fontSize: 13, marginTop: 8 }}>
+                  이 화면을 학원 관계자에게 보여주세요.<br />
+                  확인 전에 화면을 닫으면 다시 제출하게 되어 중복 응답이 생깁니다.
+                </div>
+              </div>
+              <button className="btn full" style={{ marginTop: 14 }} onClick={confirmByStaff}>
+                학원 관계자 확인 완료
+              </button>
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                위 버튼은 학원 관계자가 확인한 뒤에 눌러주세요.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="muted" style={{ marginTop: 18 }}>
+                확인이 완료되었습니다. 이제 화면을 닫으셔도 됩니다.
+              </p>
+              <button className="btn secondary full" style={{ marginTop: 10 }} onClick={startNextStudent}>
+                다른 학생 제출하기
+              </button>
+              <p className="muted" style={{ fontSize: 12, marginTop: 8 }}>
+                핸드폰을 빌려서 이어서 제출하는 경우, 이 버튼을 눌러 다음 학생 설문을 시작하세요.
+              </p>
+            </>
+          )}
         </div>
       </main>
     );

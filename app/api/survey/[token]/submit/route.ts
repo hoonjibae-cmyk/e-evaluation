@@ -48,7 +48,7 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
       supabase.from("evaluation_questions").select("*").eq("is_active", true),
       supabase
         .from("evaluation_responses")
-        .select("id, student_name")
+        .select("id, student_name, device_key, submitted_at")
         .eq("teacher_qr_link_id", qr.id)
         .neq("is_hidden", true),
       hasClassContext
@@ -70,6 +70,41 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
     const duplicateSuspected = (duplicateRes.data || []).some((row: any) => {
       return row.student_name === studentName;
     });
+
+    // 반 이름: 배정의 표시 이름(class_display_name)이 있으면 사용 (위에서 병렬로 미리 조회함)
+    let className = qr.classes?.name || "";
+    if (asgRes && !asgRes.error && asgRes.data?.class_display_name) {
+      className = asgRes.data.class_display_name;
+    }
+
+    // 이중 저장 방지(멱등 처리):
+    // 같은 QR·같은 이름·같은 기기에서 최근 3분 이내에 저장된 응답이 있으면 새로 저장하지 않고
+    // 기존 제출 결과를 그대로 돌려줍니다.
+    // (제출은 서버에 저장됐지만 네트워크 지연/타임아웃으로 완료 화면을 못 본 학생이
+    //  다시 제출을 눌렀을 때 중복 응답이 쌓이던 문제를 근본적으로 막습니다.)
+    const RECENT_SUBMIT_WINDOW_MS = 3 * 60 * 1000;
+    const nowMs = Date.now();
+    const recentSameSubmission = deviceKey
+      ? (duplicateRes.data || []).find((row: any) => {
+          if (row.student_name !== studentName) return false;
+          if (!row.device_key || row.device_key !== deviceKey) return false;
+          const submittedMs = new Date(row.submitted_at || 0).getTime();
+          return Number.isFinite(submittedMs) && nowMs - submittedMs < RECENT_SUBMIT_WINDOW_MS;
+        })
+      : null;
+
+    if (recentSameSubmission) {
+      return NextResponse.json({
+        ok: true,
+        deduped: true,
+        complete: {
+          studentName,
+          teacherName: qr.teachers?.name || "",
+          className,
+          submittedAt: recentSameSubmission.submitted_at
+        }
+      });
+    }
 
     const pressureAnswer = answers["pressure_or_reward"];
     const pressureFlag = pressureAnswer?.booleanValue === true;
@@ -109,12 +144,6 @@ export async function POST(request: NextRequest, { params }: { params: { token: 
 
     const answersInsertRes = await supabase.from("evaluation_answers").insert(answerRows);
     if (answersInsertRes.error) throw answersInsertRes.error;
-
-    // 반 이름: 배정의 표시 이름(class_display_name)이 있으면 사용 (위에서 병렬로 미리 조회함)
-    let className = qr.classes?.name || "";
-    if (asgRes && !asgRes.error && asgRes.data?.class_display_name) {
-      className = asgRes.data.class_display_name;
-    }
 
     // QR 응답 수 카운터 갱신은 부가 기능이므로, 실패하거나 느려도 제출 완료를 막지 않습니다.
     try {
