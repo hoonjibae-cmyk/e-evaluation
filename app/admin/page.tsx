@@ -7753,6 +7753,24 @@ function TeacherReport({
   const goodFreeComments = teacherFreeComments.filter((c: any) => c.code === "teacher_good_comment");
   const badFreeComments = teacherFreeComments.filter((c: any) => c.code === "teacher_bad_comment");
 
+  // 클리닉 관련 서술형 응답: 학원 공통 문항이지만, 해당 선생님 반 학생이 남긴 내용이라
+  // 클리닉 시험 준비에 참고할 수 있도록 선생님 리포트에도 익명으로 전달합니다.
+  const clinicFreeComments = (responses || []).flatMap((response: any) => {
+    const clsName = displayClassName(response.evaluation_period_id, response.class_id, response.classes?.name || "");
+    return (response.evaluation_answers || [])
+      .filter((ans: any) => {
+        const question = ans.evaluation_questions || {};
+        const code = String(question.code || "").toLowerCase();
+        const title = String(question.title || "");
+        const isClinic = code.startsWith("clinic") || code.includes("clinic") || title.includes("클리닉");
+        return isClinic && String(ans.text_value || "").trim();
+      })
+      .map((ans: any) => ({
+        text: String(ans.text_value).trim(),
+        className: clsName
+      }));
+  });
+
   const activeMappings = (classMappings || []).filter((mapping: any) => mapping.is_active !== false && mapping.from_class_id && mapping.to_class_id);
   const bidirectionalMappings = activeMappings.filter((mapping: any) => (mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional")) !== "oneway");
   const oneWayMappings = activeMappings.filter((mapping: any) => (mapping.direction_mode || (mapping.bidirectional === false ? "oneway" : "bidirectional")) === "oneway");
@@ -8118,11 +8136,11 @@ function TeacherReport({
           })}
           {!classNamesForResponses.length && <Empty message="응답 데이터가 없습니다." />}
 
-          {(goodFreeComments.length > 0 || badFreeComments.length > 0) && (
+          {(goodFreeComments.length > 0 || badFreeComments.length > 0 || clinicFreeComments.length > 0) && (
             <div className="report-response-section">
               <div className="response-section-title">
                 <h2 className="h2">학생 서술형 코멘트 <span className="muted" style={{ fontSize: 15, fontWeight: 700 }}>(익명)</span></h2>
-                <span>{goodFreeComments.length + badFreeComments.length}건</span>
+                <span>{goodFreeComments.length + badFreeComments.length + clinicFreeComments.length}건</span>
               </div>
               {goodFreeComments.length > 0 && (
                 <div style={{ marginTop: 10 }}>
@@ -8142,6 +8160,21 @@ function TeacherReport({
                   <div style={{ display: "grid", gap: 8, marginTop: 6 }}>
                     {badFreeComments.map((c: any, i: number) => (
                       <div key={`bad-${i}`} className="notice" style={{ padding: "10px 12px" }}>
+                        {c.className && <span className="muted small" style={{ marginRight: 6 }}>[{c.className}]</span>}{c.text}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {clinicFreeComments.length > 0 && (
+                <div style={{ marginTop: 14 }}>
+                  <b>클리닉 관련 학생 의견</b>
+                  <p className="muted" style={{ fontSize: 12, margin: "4px 0 6px" }}>
+                    학원 공통 문항에 대한 응답이라 선생님 평가 점수에는 반영되지 않습니다. 클리닉 운영·시험 준비에 참고하세요.
+                  </p>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {clinicFreeComments.map((c: any, i: number) => (
+                      <div key={`clinic-${i}`} className="notice" style={{ padding: "10px 12px" }}>
                         {c.className && <span className="muted small" style={{ marginRight: 6 }}>[{c.className}]</span>}{c.text}
                       </div>
                     ))}
