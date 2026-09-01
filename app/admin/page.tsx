@@ -533,6 +533,7 @@ function reportSnapshotCss() {
     .report-page::before { content:""; position:absolute; inset:0 auto auto 0; width:2mm; height:100%; background:linear-gradient(180deg,#111827,#2563eb); opacity:.92; }
     .report-page-header-designed { padding-bottom:4mm; border-bottom:1px solid #e5e7eb; }
     .report-kicker { display:inline-flex; align-items:center; min-height:6mm; padding:1mm 3mm; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:8pt; font-weight:900; margin-bottom:3mm; }
+    .report-no-rank-note { margin-top:2.5mm; padding:2.5mm 3mm; border-radius:2.5mm; border:1px solid #fcd34d; background:#fffbeb; color:#92400e; font-size:8.5pt; font-weight:800; line-height:1.45; }
     .report-kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3mm; margin:4mm 0 5mm; }
     .report-kpi { border:1px solid #e5e7eb; border-radius:4mm; padding:3mm; background:linear-gradient(180deg,#fff,#f8fafc); }
     .report-kpi span { display:block; color:#64748b; font-size:7.5pt; font-weight:800; }
@@ -1237,6 +1238,13 @@ function webReportSnapshotCss() {
       font-size: 16px !important;
       line-height: 1.35 !important;
       margin-top: 12px !important;
+    }
+    .web-report-output .report-no-rank-note {
+      margin-top: 12px !important;
+      padding: 12px 14px !important;
+      border-radius: 12px !important;
+      font-size: 14px !important;
+      line-height: 1.5 !important;
     }
     .web-report-output .report-page-score .trend-class-average {
       font-size: 14px !important;
@@ -8198,10 +8206,16 @@ function TeacherReport({
               <div className="report-kicker">Page · Ranking</div>
               <h1 className="h1">{monthLabel(period?.year_month)} 강의평가 등수</h1>
               <p className="muted">전체 선생님 중 해당 선생님의 위치를 확인합니다. 타 선생님 이름은 가려집니다.</p>
+              {!teacherRank && (
+                <p className="report-no-rank-note">
+                  {teacher?.name || "해당"} 선생님은 {monthLabel(period?.year_month)} 강의평가를 시행하지 않아 등수에 포함되지 않았습니다.
+                  <br />아래 목록은 전체 선생님의 분포를 참고용으로 보여줍니다.
+                </p>
+              )}
             </div>
             <div className="report-meta">
               <b>선생님 위치</b>
-              <br />{teacherRank ? `${teacherRank}위` : "-"}
+              <br />{teacherRank ? `${teacherRank}위` : "해당 없음"}
             </div>
           </div>
           <div className="ranking-card">
@@ -8228,10 +8242,16 @@ function TeacherReport({
               <div className="report-kicker">Page · Retention</div>
               <h1 className="h1">{monthLabel(period?.year_month)} 퇴원율 등수</h1>
               <p className="muted">퇴원율은 낮은 순으로 정렬합니다. 현재 버전에서는 관리자가 직접 입력한 확정값을 사용합니다.</p>
+              {!withdrawalRank && (
+                <p className="report-no-rank-note">
+                  {teacher?.name || "해당"} 선생님은 {monthLabel(period?.year_month)} 퇴원율 값이 없어 등수에 포함되지 않았습니다.
+                  <br />아래 목록은 전체 선생님의 분포를 참고용으로 보여줍니다.
+                </p>
+              )}
             </div>
             <div className="report-meta">
               <b>선생님 위치</b>
-              <br />{withdrawalRank ? `${withdrawalRank}위` : "-"}
+              <br />{withdrawalRank ? `${withdrawalRank}위` : "해당 없음"}
             </div>
           </div>
           <div className="ranking-card withdrawal-card">
