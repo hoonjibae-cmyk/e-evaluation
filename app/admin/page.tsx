@@ -7907,6 +7907,9 @@ function TeacherReport({
   const responseCount = responsesWithClassGroup.length;
   const teacherRankMap = buildNumericRankMap(evaluationRanking || [], (row: any) => row.avg_score_100, "desc");
   const withdrawalRankMapForReport = buildNumericRankMap(withdrawalRanking || [], (row: any) => row.withdrawal_rate_percent, "asc");
+  // 해당 월에 이 선생님의 응답이 아예 없는 경우(강의평가 미시행) 각 페이지에 안내를 표시합니다.
+  const noResponsesThisPeriod = !(responses || []).length;
+  const noEvalNoteText = `${teacher?.name || "해당"} 선생님은 ${monthLabel(period?.year_month)} 강의평가를 시행하지 않아 이 달의 응답 데이터가 없습니다.`;
   const teacherRank = teacherRankMap.get(teacher.id) || null;
   const withdrawalRank = withdrawalRankMapForReport.get(teacher.id) || null;
   const pageCount = [
@@ -7933,6 +7936,13 @@ function TeacherReport({
               <b>익명 결과지</b>
             </div>
           </div>
+
+          {noResponsesThisPeriod && (
+            <p className="report-no-rank-note">
+              {noEvalNoteText}
+              <br />아래 지표와 각 페이지의 값이 비어 있는 것은 오류가 아닙니다.
+            </p>
+          )}
 
           <div className="report-kpi-grid cover-kpis">
             <ReportKpi label="응답 수" value={`${responseCount}건`} note="학생 이름 미표시" />
@@ -7968,6 +7978,12 @@ function TeacherReport({
               <div className="report-kicker">Page · Trend</div>
               <h1 className="h1">{teacher.name} 선생님</h1>
               <p className="muted">{period?.title} · 평가월 포함 최근 {count}개월 반별 강의평가 점수 트렌드</p>
+              {noResponsesThisPeriod && (
+                <p className="report-no-rank-note">
+                  {noEvalNoteText}
+                  <br />그래프의 해당 월 값이 비어 있는 것은 정상이며, 이전 달 점수는 참고용으로 함께 표시됩니다.
+                </p>
+              )}
             </div>
             <div className="report-meta">
               <b>출력 기준</b>
@@ -8099,6 +8115,9 @@ function TeacherReport({
               <div className="report-kicker">Page · Average Table</div>
               <h1 className="h1">반별 항목별 평균표</h1>
               <p className="muted">{teacher.name} 선생님 · {period?.title} · 개별 학생 응답은 표시하지 않고 항목별 해당월 평균만 표시합니다.</p>
+              {noResponsesThisPeriod && (
+                <p className="report-no-rank-note">{noEvalNoteText}</p>
+              )}
             </div>
             <div className="report-meta">
               <b>응답 수</b>
@@ -8208,7 +8227,9 @@ function TeacherReport({
               <p className="muted">전체 선생님 중 해당 선생님의 위치를 확인합니다. 타 선생님 이름은 가려집니다.</p>
               {!teacherRank && (
                 <p className="report-no-rank-note">
-                  {teacher?.name || "해당"} 선생님은 {monthLabel(period?.year_month)} 강의평가를 시행하지 않아 등수에 포함되지 않았습니다.
+                  {noResponsesThisPeriod
+                    ? `${teacher?.name || "해당"} 선생님은 ${monthLabel(period?.year_month)} 강의평가를 시행하지 않아 등수에 포함되지 않았습니다.`
+                    : `${teacher?.name || "해당"} 선생님은 ${monthLabel(period?.year_month)} 등수 산출 대상에 포함되지 않았습니다.`}
                   <br />아래 목록은 전체 선생님의 분포를 참고용으로 보여줍니다.
                 </p>
               )}
