@@ -533,6 +533,7 @@ function reportSnapshotCss() {
     .report-page::before { content:""; position:absolute; inset:0 auto auto 0; width:2mm; height:100%; background:linear-gradient(180deg,#111827,#2563eb); opacity:.92; }
     .report-page-header-designed { padding-bottom:4mm; border-bottom:1px solid #e5e7eb; }
     .report-kicker { display:inline-flex; align-items:center; min-height:6mm; padding:1mm 3mm; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:8pt; font-weight:900; margin-bottom:3mm; }
+    .report-class-avg { margin-top:0.8mm; font-size:7.5pt; font-weight:900; color:#1d4ed8; white-space:nowrap; }
     .report-no-rank-note { margin-top:2.5mm; padding:2.5mm 3mm; border-radius:2.5mm; border:1px solid #fcd34d; background:#fffbeb; color:#92400e; font-size:8.5pt; font-weight:800; line-height:1.45; }
     .report-kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3mm; margin:4mm 0 5mm; }
     .report-kpi { border:1px solid #e5e7eb; border-radius:4mm; padding:3mm; background:linear-gradient(180deg,#fff,#f8fafc); }
@@ -1238,6 +1239,10 @@ function webReportSnapshotCss() {
       font-size: 16px !important;
       line-height: 1.35 !important;
       margin-top: 12px !important;
+    }
+    .web-report-output .report-class-avg {
+      margin-top: 4px !important;
+      font-size: 13px !important;
     }
     .web-report-output .report-no-rank-note {
       margin-top: 12px !important;
@@ -8128,6 +8133,13 @@ function TeacherReport({
           {classNamesForResponses.map((className: any) => {
             const classResponses = responsesWithClassGroup.filter((r: any) => (r.canonical_class_name || "반 미지정") === className);
             const respDisplayName = displayClassName(period?.id, classResponses[0]?.class_id, className);
+            // 이 반의 해당 월 평균: 선생님 평가 5문항 응답 점수 전체의 평균
+            const classAllScores = classResponses.flatMap((response: any) =>
+              teacherQuestions
+                .map((q: any) => answerScore(response, q.code))
+                .filter((value: any) => value !== null)
+            ) as number[];
+            const classMonthAvg = average(classAllScores);
             return (
               <div key={className} className="report-response-section">
                 <div className="response-section-title">
@@ -8140,7 +8152,12 @@ function TeacherReport({
                       <tr>
                         <th>No.</th>
                         <th>평가 내용</th>
-                        <th>{monthLabel(period?.year_month)} AVG</th>
+                        <th>
+                          <div>{monthLabel(period?.year_month)} AVG</div>
+                          <div className="report-class-avg">
+                            반 평균 {classMonthAvg === null ? "-" : `${formatScore(classMonthAvg)}점`}
+                          </div>
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
