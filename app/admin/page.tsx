@@ -3366,7 +3366,55 @@ export default function AdminPage() {
       await loadData();
       setMessage(body.message || "Slack 사용자 연결을 확인했습니다.");
     } catch (error: any) {
+      // 확인 실패 시에도 서버에서 연결을 해제했을 수 있으므로 최신 상태를 다시 불러옵니다.
+      await loadData();
       setMessage(error.message || "Slack 연결 확인 중 오류가 발생했습니다.");
+    } finally {
+      setSlackBusy("");
+    }
+  }
+
+  // Slack 연결 일괄 확인: 저장된 연결을 그대로 믿지 않고 선생님별로 다시 조회합니다.
+  // 퇴사 등으로 계정이 삭제된 경우 연결이 해제되어 상태가 '연결 해제'로 바뀝니다.
+  async function lookupAllSlackUsers() {
+    const targets = (data?.teachers || []).filter(
+      (t: any) => t.is_active !== false && String(t.slack_email || "").trim()
+    );
+    if (!targets.length) {
+      setMessage("Slack 이메일이 등록된 사용중 선생님이 없습니다. 먼저 Slack 이메일을 입력해주세요.");
+      return;
+    }
+    const ok = window.confirm(
+      `사용중 선생님 ${targets.length}명의 Slack 연결을 다시 확인할까요?\n\n` +
+        `· Slack 계정이 삭제·비활성화된 선생님은 연결이 자동 해제됩니다.\n` +
+        `· 시간이 조금 걸릴 수 있습니다.`
+    );
+    if (!ok) return;
+
+    try {
+      setSlackBusy("bulk-lookup");
+      setMessage(`Slack 연결을 확인하는 중입니다. (0/${targets.length})`);
+      let connected = 0;
+      const disconnected: string[] = [];
+      for (let i = 0; i < targets.length; i += 1) {
+        const teacher = targets[i];
+        setMessage(`Slack 연결을 확인하는 중입니다. (${i + 1}/${targets.length}) ${teacher.name} 선생님`);
+        try {
+          await api("/api/admin/slack", {
+            method: "POST",
+            body: JSON.stringify({ action: "lookup_teacher", teacherId: teacher.id })
+          });
+          connected += 1;
+        } catch {
+          disconnected.push(teacher.name || "이름 미상");
+        }
+      }
+      await loadData();
+      const detail = disconnected.length ? ` 연결 해제: ${disconnected.join(", ")}` : "";
+      setMessage(`Slack 연결 확인 완료 — 연결됨 ${connected}명, 확인 실패 ${disconnected.length}명.${detail}`);
+    } catch (error: any) {
+      await loadData();
+      setMessage(error.message || "Slack 연결 일괄 확인 중 오류가 발생했습니다.");
     } finally {
       setSlackBusy("");
     }
@@ -5344,7 +5392,15 @@ export default function AdminPage() {
                 </Field>
               </div>
               <div className="form-row">
-                <button className="btn" onClick={createTeacher}>선생님 추가</button>
+                <div className="row-actions">
+                  <button className="btn" onClick={createTeacher}>선생님 추가</button>
+                  <button className="btn secondary" onClick={lookupAllSlackUsers} disabled={slackBusy === "bulk-lookup"}>
+                    {slackBusy === "bulk-lookup" ? "Slack 연결 확인 중..." : "Slack 연결 일괄 확인"}
+                  </button>
+                </div>
+                <p className="muted" style={{ fontSize: 12, margin: "8px 0 0" }}>
+                  일괄 확인은 저장된 값을 그대로 두지 않고 Slack에 다시 조회합니다. 퇴사 등으로 계정이 삭제된 선생님은 연결이 자동 해제되어 <b>연결 해제</b>로 표시됩니다.
+                </p>
               </div>
             </div>
 
@@ -5372,7 +5428,13 @@ export default function AdminPage() {
                         <td><input className="input" value={draft.teacher_code || ""} onChange={(e) => setTeacherDrafts((prev) => ({ ...prev, [teacher.id]: { ...draft, teacher_code: e.target.value } }))} placeholder="선택" /></td>
                         <td><input className="input" value={draft.slack_email || ""} onChange={(e) => setTeacherDrafts((prev) => ({ ...prev, [teacher.id]: { ...draft, slack_email: e.target.value } }))} placeholder="teacher@example.com" /></td>
                         <td>
-                          {draft.slack_user_id ? <span className="badge ok">연결됨</span> : <span className="badge">미연결</span>}
+                          {draft.slack_user_id ? (
+                            <span className="badge ok">연결됨</span>
+                          ) : String(draft.slack_email || "").trim() ? (
+                            <span className="badge danger">연결 해제</span>
+                          ) : (
+                            <span className="badge">미연결</span>
+                          )}
                           {draft.slack_user_id ? <div className="muted small">{draft.slack_user_id}</div> : null}
                         </td>
                         <td><input className="input" value={draft.memo || ""} onChange={(e) => setTeacherDrafts((prev) => ({ ...prev, [teacher.id]: { ...draft, memo: e.target.value } }))} /></td>

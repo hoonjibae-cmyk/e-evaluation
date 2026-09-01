@@ -72,24 +72,69 @@ function isInternalReportLink(link: any) {
     || title.includes("원장 내부 확인용");
 }
 
+// 저장된 Slack 연결 정보를 지웁니다. (퇴사 등으로 Slack 계정이 삭제/비활성화된 경우)
+async function clearSlackLink(supabase: ReturnType<typeof getSupabaseAdmin>, teacherId: string) {
+  if (!teacherId) return;
+  try {
+    await supabase
+      .from("teachers")
+      .update({
+        slack_user_id: null,
+        slack_dm_enabled: false,
+        slack_last_checked_at: new Date().toISOString()
+      })
+      .eq("id", teacherId);
+  } catch {
+    // 연결 해제 저장 실패가 확인 작업 자체를 막지 않도록 무시합니다.
+  }
+}
+
 async function resolveSlackUser(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   teacher: any,
   token: string,
-  emailOverride?: string
+  emailOverride?: string,
+  options?: { forceVerify?: boolean }
 ) {
   const email = String(emailOverride || teacher?.slack_email || "").trim();
+  const forceVerify = Boolean(options?.forceVerify);
 
-  if (teacher?.slack_user_id && !emailOverride) return teacher.slack_user_id;
+  // forceVerify(연결 확인)일 때는 저장된 ID를 그대로 믿지 않고 Slack에 다시 조회합니다.
+  // 그렇지 않으면 퇴사로 Slack 계정이 삭제돼도 '연결됨' 상태가 계속 남습니다.
+  if (teacher?.slack_user_id && !emailOverride && !forceVerify) return teacher.slack_user_id;
 
   if (!email) {
+    if (forceVerify && teacher?.slack_user_id) {
+      await clearSlackLink(supabase, teacher.id);
+      throw new Error("Slack 이메일이 없어 연결을 확인할 수 없습니다. 기존 연결 정보를 해제했습니다. 선생님 관리에서 Slack 이메일을 입력한 뒤 다시 확인해주세요.");
+    }
     throw new Error("선생님 Slack 이메일이 등록되어 있지 않습니다. 선생님 관리에서 Slack 이메일을 입력한 뒤 다시 눌러주세요.");
   }
 
-  const found = await slackGet("users.lookupByEmail", { email }, token);
-  const userId = found?.user?.id;
+  let found: any;
+  try {
+    found = await slackGet("users.lookupByEmail", { email }, token);
+  } catch (error: any) {
+    // 계정 삭제/비활성화 시 users_not_found 등이 반환됩니다. 저장된 연결을 해제합니다.
+    if (forceVerify) {
+      await clearSlackLink(supabase, teacher.id);
+      throw new Error(`Slack에서 이 이메일의 계정을 찾을 수 없어 연결을 해제했습니다. (${email}) 퇴사 등으로 Slack 계정이 삭제되었는지 확인해주세요.`);
+    }
+    throw error;
+  }
 
-  if (!userId) {
+  const slackUser = found?.user;
+  const userId = slackUser?.id;
+
+  if (!userId || slackUser?.deleted === true) {
+    if (forceVerify) {
+      await clearSlackLink(supabase, teacher.id);
+      throw new Error(
+        slackUser?.deleted === true
+          ? `이 Slack 계정은 비활성화(삭제)된 계정이라 연결을 해제했습니다. (${email})`
+          : `Slack 사용자 ID를 찾지 못해 연결을 해제했습니다. (${email})`
+      );
+    }
     throw new Error("Slack 사용자 ID를 찾지 못했습니다. 입력한 이메일이 선생님의 Slack 계정 이메일과 같은지 확인해주세요.");
   }
 
@@ -141,7 +186,9 @@ export async function POST(request: NextRequest) {
       if (teacherRes.error) throw teacherRes.error;
 
       const slackEmail = String(body?.slackEmail || "").trim();
-      const userId = await resolveSlackUser(supabase, teacherRes.data, slackToken, slackEmail);
+      const userId = await resolveSlackUser(supabase, teacherRes.data, slackToken, slackEmail, {
+        forceVerify: action === "lookup_teacher"
+      });
 
       if (action === "lookup_teacher") {
         await logAction(supabase, guard.admin, "slack_lookup_teacher", "teachers", teacherId, { slackUserId: userId });
