@@ -534,6 +534,15 @@ function reportSnapshotCss() {
     .report-page::before { content:""; position:absolute; inset:0 auto auto 0; width:2mm; height:100%; background:linear-gradient(180deg,#111827,#2563eb); opacity:.92; }
     .report-page-header-designed { padding-bottom:4mm; border-bottom:1px solid #e5e7eb; }
     .report-kicker { display:inline-flex; align-items:center; min-height:6mm; padding:1mm 3mm; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:8pt; font-weight:900; margin-bottom:3mm; }
+    .withdrawal-focus-grid { display:grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 4mm; margin-top: 5mm; }
+    .withdrawal-focus-card { border:1px solid #d1fae5; background:#f0fdf4; border-radius:3mm; padding:4mm 3mm; text-align:center; break-inside: avoid; }
+    .withdrawal-focus-card span { display:block; font-size:8pt; font-weight:800; color:#047857; }
+    .withdrawal-focus-card b { display:block; margin-top:1.5mm; font-size:19pt; font-weight:900; color:#065f46; letter-spacing:-0.03em; }
+    .withdrawal-focus-card small { display:block; margin-top:1mm; font-size:7pt; color:#6b7280; font-weight:700; }
+    .withdrawal-goal-note { margin-top:6mm; padding:6mm 5mm; border-radius:3mm; font-size:11.5pt; font-weight:800; line-height:1.65; text-align:center; break-inside: avoid; }
+    .withdrawal-goal-note b { font-size:13.5pt; }
+    .withdrawal-goal-note.alert { background:#fef2f2; border:1.5px solid #fca5a5; color:#991b1b; }
+    .withdrawal-goal-note.good { background:#eff6ff; border:1.5px solid #bfdbfe; color:#1e3a8a; }
     .report-class-avg { margin-top:0.8mm; font-size:7.5pt; font-weight:900; color:#1d4ed8; white-space:nowrap; }
     .report-no-rank-note { margin-top:2.5mm; padding:2.5mm 3mm; border-radius:2.5mm; border:1px solid #fcd34d; background:#fffbeb; color:#92400e; font-size:8.5pt; font-weight:800; line-height:1.45; }
     .report-kpi-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:3mm; margin:4mm 0 5mm; }
@@ -1241,6 +1250,13 @@ function webReportSnapshotCss() {
       line-height: 1.35 !important;
       margin-top: 12px !important;
     }
+    .web-report-output .withdrawal-focus-grid { gap: 16px !important; margin-top: 20px !important; }
+    .web-report-output .withdrawal-focus-card { padding: 20px 16px !important; border-radius: 16px !important; }
+    .web-report-output .withdrawal-focus-card span { font-size: 14px !important; }
+    .web-report-output .withdrawal-focus-card b { font-size: 34px !important; margin-top: 8px !important; }
+    .web-report-output .withdrawal-focus-card small { font-size: 12px !important; margin-top: 6px !important; }
+    .web-report-output .withdrawal-goal-note { margin-top: 22px !important; padding: 22px 20px !important; font-size: 18px !important; border-radius: 16px !important; }
+    .web-report-output .withdrawal-goal-note b { font-size: 21px !important; }
     .web-report-output .report-class-avg {
       margin-top: 4px !important;
       font-size: 13px !important;
@@ -1536,6 +1552,14 @@ function webReportSnapshotCss() {
         border-radius: 14px !important;
         background: #ffffff !important;
       }
+
+      .web-report-output .withdrawal-focus-grid {
+        grid-template-columns: 1fr !important;
+        gap: 10px !important;
+      }
+      .web-report-output .withdrawal-focus-card b { font-size: 28px !important; }
+      .web-report-output .withdrawal-goal-note { font-size: 16px !important; padding: 16px !important; }
+      .web-report-output .withdrawal-goal-note b { font-size: 18px !important; }
 
       .web-report-output .bar-value {
         text-align: left !important;
@@ -7980,6 +8004,18 @@ function TeacherReport({
   const noEvalNoteText = `${teacher?.name || "해당"} 선생님은 ${monthLabel(period?.year_month)} 강의평가를 시행하지 않아 이 달의 응답 데이터가 없습니다.`;
   const teacherRank = teacherRankMap.get(teacher.id) || null;
   const withdrawalRank = withdrawalRankMapForReport.get(teacher.id) || null;
+
+  // 퇴원율 페이지는 본인 값만 공개합니다. (다른 선생님 퇴원율은 표시하지 않음)
+  const WITHDRAWAL_TARGET_PERCENT = 4;
+  const ownWithdrawalRaw =
+    metric?.withdrawal_rate_percent ??
+    (withdrawalRanking || []).find((row: any) => row.teacher_id === teacher.id)?.withdrawal_rate_percent;
+  const ownWithdrawalRate =
+    ownWithdrawalRaw === null || ownWithdrawalRaw === undefined || ownWithdrawalRaw === "" || !Number.isFinite(Number(ownWithdrawalRaw))
+      ? null
+      : Number(ownWithdrawalRaw);
+  const withdrawalTeacherCount = (withdrawalRanking || []).length;
+  const withdrawalAboveTarget = ownWithdrawalRate !== null && ownWithdrawalRate > WITHDRAWAL_TARGET_PERCENT;
   const pageCount = [
     includePage("coverPage"),
     includePage("scoreTable"),
@@ -8026,7 +8062,7 @@ function TeacherReport({
                 {includePage("scoreTable") && <li>반별 최근 {count}개월 평가점수 트렌드</li>}
                 {includePage("responseTable") && <li>반별 항목별 평균표</li>}
                 {includePage("evaluationRanking") && <li>해당월 전체 선생님 강의평가 등수</li>}
-                {includePage("withdrawalRanking") && <li>해당월 전체 선생님 퇴원율 등수</li>}
+                {includePage("withdrawalRanking") && <li>해당월 본인 퇴원율 및 등수</li>}
               </ol>
             </div>
             <div className="report-cover-section">
@@ -8341,12 +8377,11 @@ function TeacherReport({
           <div className="report-page-header report-page-header-designed">
             <div>
               <div className="report-kicker">Page · Retention</div>
-              <h1 className="h1">{monthLabel(period?.year_month)} 퇴원율 등수</h1>
-              <p className="muted">퇴원율은 낮은 순으로 정렬합니다. 현재 버전에서는 관리자가 직접 입력한 확정값을 사용합니다.</p>
+              <h1 className="h1">{monthLabel(period?.year_month)} 퇴원율</h1>
+              <p className="muted">선생님 본인의 퇴원율과 전체 선생님 중 위치를 안내합니다. 다른 선생님의 퇴원율은 표시하지 않습니다.</p>
               {!withdrawalRank && (
                 <p className="report-no-rank-note">
                   {teacher?.name || "해당"} 선생님은 {monthLabel(period?.year_month)} 퇴원율 값이 없어 등수에 포함되지 않았습니다.
-                  <br />아래 목록은 전체 선생님의 분포를 참고용으로 보여줍니다.
                 </p>
               )}
             </div>
@@ -8355,20 +8390,44 @@ function TeacherReport({
               <br />{withdrawalRank ? `${withdrawalRank}위` : "해당 없음"}
             </div>
           </div>
-          <div className="ranking-card withdrawal-card">
-            {withdrawalRanking.map((row: any, index: number) => (
-              <Bar
-                key={row.teacher_id}
-                label={`${withdrawalRankMapForReport.get(row.teacher_id) || index + 1}위 · ${maskTeacherName(row.teacher_name, isInternalReport || row.teacher_id === teacher.id)}`}
-                value={Number(row.withdrawal_rate_percent || 0)}
-                max={withdrawalMax}
-                suffix="%"
-                highlight={row.teacher_id === teacher.id}
-                tone="withdrawal"
-              />
-            ))}
+
+          <div className="withdrawal-focus-grid">
+            <div className="withdrawal-focus-card">
+              <span>{monthLabel(period?.year_month)} 본인 퇴원율</span>
+              <b>{ownWithdrawalRate === null ? "-" : `${formatScore(ownWithdrawalRate)}%`}</b>
+              <small>관리자 확정 입력값</small>
+            </div>
+            <div className="withdrawal-focus-card">
+              <span>학원 목표 퇴원율</span>
+              <b>{WITHDRAWAL_TARGET_PERCENT}%</b>
+              <small>이하 유지 목표</small>
+            </div>
+            <div className="withdrawal-focus-card">
+              <span>전체 선생님 중 등수</span>
+              <b>{withdrawalRank ? `${withdrawalRank}위` : "-"}</b>
+              <small>{withdrawalTeacherCount ? `총 ${withdrawalTeacherCount}명 중` : "퇴원율 입력 기준"}</small>
+            </div>
           </div>
-          {!withdrawalRanking.length && <Empty message="퇴원율 등수 데이터가 없습니다. 먼저 퇴원율 입력 탭에서 값을 저장해주세요." />}
+
+          {ownWithdrawalRate !== null && (
+            <div className={`withdrawal-goal-note ${withdrawalAboveTarget ? "alert" : "good"}`}>
+              {withdrawalAboveTarget ? (
+                <>
+                  우리 학원의 <b>목표 퇴원율은 4%</b>입니다.
+                  <br />퇴원 원인을 면밀히 살펴보고, 퇴원율을 낮출 수 있는
+                  <br />실질적이고 건설적인 개선 방안을 함께 고민해주시기 바랍니다.
+                </>
+              ) : (
+                <>
+                  우리 학원의 <b>목표 퇴원율은 4%</b>입니다.
+                  <br />{teacher.name} 선생님은 이번 달 목표를 달성하셨습니다.
+                  <br />학생 한 명 한 명을 세심하게 살펴주신 노력에 감사드리며, 지금의 좋은 흐름을 계속 이어가 주시기 바랍니다.
+                </>
+              )}
+            </div>
+          )}
+
+          {ownWithdrawalRate === null && <Empty message="퇴원율 데이터가 없습니다. 관리자 퇴원율 입력 후 결과지를 다시 생성해주세요." />}
           <ReportFooter period={period} teacher={teacher} />
         </div>
       )}
