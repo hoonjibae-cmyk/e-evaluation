@@ -522,7 +522,8 @@ function reportSnapshotCss() {
     .trend-bar { width:100%; min-height: 1mm; border-radius: 2mm 2mm 0.5mm 0.5mm; }
     .trend-month { margin-top: 1.5mm; font-size: 7pt; color:#64748b; font-weight:800; white-space:nowrap; }
     .trend-class-name { margin-top: 2mm; text-align:center; font-size: 8.5pt; font-weight:900; line-height:1.25; word-break: keep-all; }
-    .bar-row { display:grid; grid-template-columns: 210px 1fr 86px; gap: 12px; align-items:center; margin: 10px 0; break-inside: avoid; page-break-inside: avoid; }
+    /* 모든 행에 동일한 박스 규격(패딩·테두리)을 적용해, 본인 강조 행과 다른 행의 막대 열이 정확히 맞도록 합니다. */
+    .bar-row { display:grid; grid-template-columns: 210px 1fr 86px; gap: 12px; align-items:center; margin: 10px 0; padding:1.6mm 2mm; margin-left:-2mm; margin-right:-2mm; border:1px solid transparent; border-radius:3mm; break-inside: avoid; page-break-inside: avoid; }
     .bar-track { height: 22px; background:#f1f5f9; border-radius: 999px; overflow:hidden; border:1px solid #e5e7eb; }
     .bar-fill { height:100%; background:#111827; border-radius: 999px; }
     .report-response-section { margin-top: 18px; break-inside: avoid; page-break-inside: avoid; }
@@ -567,7 +568,7 @@ function reportSnapshotCss() {
     .ranking-card { padding:3mm; border:1px solid #e5e7eb; border-radius:5mm; background:#fff; }
     .bar-label { font-weight:850; }
     .bar-value { text-align:right; font-weight:900; }
-    .bar-row.highlight { padding:1.6mm 2mm; margin-left:-2mm; margin-right:-2mm; border-radius:3mm; background:#eff6ff; border:1px solid #bfdbfe; }
+    .bar-row.highlight { background:#eff6ff; border-color:#bfdbfe; }
     .bar-row.highlight .bar-fill { background:linear-gradient(90deg,#1d4ed8,#60a5fa); }
     .bar-row.withdrawal .bar-fill { background:linear-gradient(90deg,#059669,#34d399); }
     .report-footer { display:flex; justify-content:space-between; gap:4mm; align-items:center; margin-top:auto; padding-top:2mm; border-top:1px solid #e5e7eb; color:#64748b; font-size:7pt; font-weight:800; flex-shrink:0; break-inside:avoid; page-break-inside:avoid; }
