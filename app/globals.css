@@ -1586,6 +1586,111 @@ td .input, td .select {
   background: linear-gradient(90deg, #059669, #34d399);
 }
 
+.withdrawal-focus-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.withdrawal-focus-card {
+  padding: 18px 14px;
+  border: 1px solid #d1fae5;
+  border-radius: 18px;
+  background: #f0fdf4;
+  text-align: center;
+}
+
+.withdrawal-focus-card span {
+  display: block;
+  color: #047857;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.withdrawal-focus-card b {
+  display: block;
+  margin-top: 6px;
+  color: #065f46;
+  font-size: 30px;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+}
+
+.withdrawal-focus-card small {
+  display: block;
+  margin-top: 6px;
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.withdrawal-goal-note {
+  margin-top: 20px;
+  padding: 20px 18px;
+  border-radius: 18px;
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1.65;
+  text-align: center;
+}
+
+.withdrawal-goal-note b {
+  font-size: 19px;
+}
+
+.withdrawal-goal-note.alert {
+  background: #fef2f2;
+  border: 1.5px solid #fca5a5;
+  color: #991b1b;
+}
+
+.withdrawal-goal-note.good {
+  background: #eff6ff;
+  border: 1.5px solid #bfdbfe;
+  color: #1e3a8a;
+}
+
+.report-class-avg {
+  margin-top: 3px;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.report-no-rank-note {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #fcd34d;
+  border-radius: 12px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .withdrawal-focus-grid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .withdrawal-focus-card b {
+    font-size: 26px;
+  }
+
+  .withdrawal-goal-note {
+    font-size: 15px;
+    padding: 16px 14px;
+  }
+
+  .withdrawal-goal-note b {
+    font-size: 17px;
+  }
+}
+
 .report-footer {
   display: flex;
   justify-content: space-between;
