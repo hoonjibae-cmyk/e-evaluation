@@ -5152,6 +5152,7 @@ export default function AdminPage() {
             </div>
             <div className="btn-row">
               <button className="btn secondary" onClick={() => setTab("home")}>홈</button>
+              <a className="btn secondary" href="/guide" target="_blank" rel="noreferrer">사용설명서</a>
               <button className="btn secondary" onClick={loadData}>새로고침</button>
             </div>
           </div>

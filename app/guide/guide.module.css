@@ -1,0 +1,383 @@
+.guide {
+  background: #f5f7fb;
+  color: #24334a;
+  min-height: 100vh;
+  line-height: 1.75;
+  font-family: Arial, "Malgun Gothic", sans-serif;
+}
+.guide * {
+  box-sizing: border-box;
+}
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 18px max(24px, calc((100% - 1220px) / 2));
+  background: white;
+  border-bottom: 1px solid #e4e9f1;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 20px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.brand img {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+.brand span {
+  font-size: 13px;
+  color: #8491a5;
+  font-weight: 400;
+}
+.top > div {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+.top button,
+.top > div > a {
+  font: inherit;
+  font-size: 13px;
+  padding: 9px 16px;
+  border-radius: 22px;
+  border: 1px solid #dae2ef;
+  background: white;
+  cursor: pointer;
+}
+.top button {
+  background: #264c85;
+  color: white;
+  border-color: #264c85;
+}
+.guide a {
+  color: inherit;
+  text-decoration: none;
+}
+.wrap {
+  max-width: 1270px;
+  margin: auto;
+  padding: 40px 24px;
+}
+.hero {
+  padding: 48px;
+  border-radius: 26px;
+  background: linear-gradient(115deg, #183963, #315a93);
+  color: white;
+  margin-bottom: 38px;
+}
+.hero > span {
+  font-size: 11px;
+  letter-spacing: 2px;
+  color: #b6ceee;
+  font-weight: 700;
+}
+.hero h1 {
+  font-size: 38px;
+  line-height: 1.4;
+  letter-spacing: -1.5px;
+  margin: 18px 0;
+}
+.hero p {
+  color: #d8e5f7;
+  font-size: 16px;
+}
+.hero > div {
+  font-size: 12px;
+  margin-top: 24px;
+  color: #c2d6f0;
+}
+.hero b {
+  padding: 0 10px;
+}
+.layout {
+  display: grid;
+  grid-template-columns: 225px minmax(0, 1fr);
+  gap: 30px;
+  align-items: start;
+}
+.layout aside {
+  position: sticky;
+  top: 22px;
+}
+.layout aside > strong {
+  font-size: 12px;
+  color: #7e8da3;
+  display: block;
+  padding: 0 10px 12px;
+}
+.layout nav {
+  display: grid;
+  gap: 3px;
+}
+.layout nav a {
+  display: flex;
+  gap: 9px;
+  font-size: 13px;
+  line-height: 1.5;
+  padding: 10px;
+  border-radius: 9px;
+}
+.layout nav a:hover {
+  background: #e6edf8;
+  color: #1d4c85;
+}
+.layout nav small {
+  color: #879bb7;
+  padding-top: 1px;
+}
+.layout article {
+  min-width: 0;
+}
+.section,
+.flow {
+  background: white;
+  border: 1px solid #e0e7f0;
+  border-radius: 18px;
+  padding: 30px;
+  margin-bottom: 22px;
+  scroll-margin-top: 24px;
+}
+.guide h2 {
+  font-size: 24px;
+  margin: 5px 0 12px;
+  letter-spacing: -0.7px;
+  color: #182c48;
+}
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 1.5px;
+  font-weight: bold;
+  color: #5177ad;
+}
+.intro {
+  color: #77869a;
+  margin: 0 0 24px;
+}
+.flow > div {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 9px;
+}
+.flow a {
+  background: #f0f5fc;
+  border-radius: 10px;
+  padding: 12px;
+  font-size: 13px;
+}
+.flow b {
+  display: inline-block;
+  color: #4474aa;
+  margin-right: 8px;
+}
+.flow p {
+  font-size: 12px;
+  color: #8390a2;
+  margin-bottom: 0;
+}
+.steps {
+  list-style: none;
+  padding: 0;
+  counter-reset: steps;
+}
+.steps li {
+  position: relative;
+  padding-left: 38px;
+  margin: 22px 0;
+  counter-increment: steps;
+}
+.steps li:before {
+  content: counter(steps);
+  position: absolute;
+  left: 0;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  width: 25px;
+  height: 25px;
+  border-radius: 50%;
+  background: #edf3fc;
+  color: #2d5c96;
+  font-size: 12px;
+  font-weight: bold;
+}
+.steps h3 {
+  font-size: 16px;
+  margin: 0 0 5px;
+}
+.steps p {
+  font-size: 14px;
+  margin: 0;
+  color: #5b6b81;
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+.note {
+  background: #f0f5fb;
+  border-left: 3px solid #88a9d2;
+  border-radius: 0 9px 9px 0;
+  padding: 14px 18px;
+  font-size: 13px;
+}
+.note strong {
+  color: #375a86;
+  font-size: 12px;
+}
+.note p {
+  margin: 4px 0;
+  color: #526782;
+}
+.shot {
+  margin: 24px 0;
+  border: 1px solid #dbe4ef;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #f8fafc;
+}
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.shot figcaption {
+  font-size: 11px;
+  padding: 10px 14px;
+  border-top: 1px solid #dbe4ef;
+  color: #73839a;
+}
+.faq {
+  border-top: 1px solid #e7edf5;
+  padding: 17px 0;
+  font-size: 14px;
+}
+.faq summary {
+  font-weight: 700;
+  cursor: pointer;
+}
+.faq p {
+  color: #61738b;
+}
+.footer {
+  padding: 20px;
+  color: #8995a7;
+  font-size: 12px;
+}
+.guide a:focus-visible,
+.guide button:focus-visible,
+.guide summary:focus-visible {
+  outline: 3px solid #4c85c5;
+  outline-offset: 3px;
+}
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .layout aside {
+    position: static;
+  }
+  .layout nav {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .hero {
+    padding: 30px;
+  }
+  .hero h1 {
+    font-size: 30px;
+  }
+}
+@media (max-width: 520px) {
+  .top {
+    flex-wrap: wrap;
+    padding: 16px 20px;
+  }
+  .wrap {
+    padding: 24px 16px;
+  }
+  .hero {
+    padding: 25px;
+  }
+  .hero h1 {
+    font-size: 27px;
+  }
+  .hero p {
+    font-size: 14px;
+  }
+  .section,
+  .flow {
+    padding: 22px 18px;
+  }
+  .guide h2 {
+    font-size: 21px;
+  }
+  .flow > div {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .layout nav a {
+    font-size: 12px;
+  }
+  .steps p {
+    word-break: normal;
+  }
+}
+@media print {
+  .top,
+  .layout aside {
+    display: none;
+  }
+  .guide {
+    background: white;
+  }
+  .wrap {
+    padding: 0;
+  }
+  .hero {
+    background: white;
+    color: #183963;
+    padding: 15px 0;
+    margin: 0;
+  }
+  .hero p,
+  .hero > span,
+  .hero > div {
+    color: #586a81;
+  }
+  .hero h1 {
+    font-size: 26px;
+  }
+  .layout {
+    display: block;
+  }
+  .section,
+  .flow {
+    border: 0;
+    border-radius: 0;
+    padding: 15px 0;
+  }
+  .shot,
+  .note,
+  .steps li {
+    break-inside: avoid;
+  }
+  .faq {
+    break-inside: avoid;
+  }
+  .faq p {
+    display: block;
+  }
+  .guide details:not([open]) > p {
+    display: block;
+  }
+  .footer {
+    padding: 10px 0;
+  }
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+}

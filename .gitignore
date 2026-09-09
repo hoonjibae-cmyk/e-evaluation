@@ -3,3 +3,4 @@
 .next
 .env
 .env.local
+.env*

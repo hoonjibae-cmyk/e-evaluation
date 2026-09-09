@@ -21,6 +21,7 @@ export default function HomePage() {
         </p>
         <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 20, flexWrap: "wrap" }}>
           <Link className="btn" href="/admin">관리자 화면 열기</Link>
+          <Link className="btn secondary" href="/guide">사용설명서</Link>
         </div>
       </div>
     </main>
