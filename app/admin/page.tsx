@@ -1770,7 +1770,10 @@ export default function AdminPage() {
   const [selectedReportPeriodId, setSelectedReportPeriodId] = useState<string>("");
   const [selectedQrPeriodId, setSelectedQrPeriodId] = useState<string>("");
   const [qrTeacherFilter, setQrTeacherFilter] = useState<string>("all");
-  const [qrClassFilter, setQrClassFilter] = useState<string>("all");
+  const [qrClassIds, setQrClassIds] = useState<string[]>([]);
+  const [qrClassSearch, setQrClassSearch] = useState<string>("");
+  const [qrClassPickerOpen, setQrClassPickerOpen] = useState<boolean>(false);
+  const qrClassPickerRef = useRef<HTMLDivElement | null>(null);
   const [qrFitPage, setQrFitPage] = useState<boolean>(false);
   const [selectedAssignmentPeriodId, setSelectedAssignmentPeriodId] = useState<string>("");
   const [selectedHomePeriodId, setSelectedHomePeriodId] = useState<string>("");
@@ -4475,8 +4478,8 @@ export default function AdminPage() {
     return (data?.qrLinks || [])
       .filter((link: any) => !periodId || link.evaluation_period_id === periodId)
       .filter((link: any) => qrTeacherFilter === "all" || link.teacher_id === qrTeacherFilter)
-      .filter((link: any) => qrClassFilter === "all" || link.class_id === qrClassFilter);
-  }, [data, selectedQrPeriod, qrTeacherFilter, qrClassFilter]);
+      .filter((link: any) => !qrClassIds.length || qrClassIds.includes(link.class_id));
+  }, [data, selectedQrPeriod, qrTeacherFilter, qrClassIds]);
 
   // 화면에 보이는 QR만 이미지로 생성하고, 이미 만든 것은 재사용해 재인코딩을 피합니다.
   useEffect(() => {
@@ -4523,26 +4526,79 @@ export default function AdminPage() {
     };
   }, [data, selectedQrPeriod, qrTeacherFilter, classDisplayNames]);
 
+  // 반 선택 드롭다운: 이름 검색 + 복수 선택
+  const qrClassOptions = useMemo(() => {
+    return [...qrFilterOptions.classes].sort((a: any, b: any) => String(a.name).localeCompare(String(b.name), "ko"));
+  }, [qrFilterOptions]);
+
+  const qrClassSearchResults = useMemo(() => {
+    const keyword = qrClassSearch.trim().toLowerCase();
+    if (!keyword) return qrClassOptions;
+    return qrClassOptions.filter((c: any) => String(c.name || "").toLowerCase().includes(keyword));
+  }, [qrClassOptions, qrClassSearch]);
+
+  // 선택했지만 현재 옵션 목록에 없는 반(선생님 필터 변경 등)은 자동으로 정리합니다.
+  useEffect(() => {
+    if (!qrClassIds.length) return;
+    const valid = new Set<string>(qrClassOptions.map((c: any) => c.id));
+    const next = qrClassIds.filter((id) => valid.has(id));
+    if (next.length !== qrClassIds.length) setQrClassIds(next);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qrClassOptions]);
+
+  const qrClassSummary = useMemo(() => {
+    if (!qrClassIds.length) return "전체 반";
+    const nameById = new Map<string, string>(qrClassOptions.map((c: any) => [c.id, c.name]));
+    const names = qrClassIds.map((id) => nameById.get(id)).filter(Boolean) as string[];
+    if (!names.length) return "전체 반";
+    if (names.length === 1) return names[0];
+    return `${names[0]} 외 ${names.length - 1}개 반`;
+  }, [qrClassIds, qrClassOptions]);
+
+  function toggleQrClass(classId: string) {
+    setQrClassIds((prev) => (prev.includes(classId) ? prev.filter((id) => id !== classId) : [...prev, classId]));
+  }
+
+  // 바깥 클릭 / ESC 로 반 선택 패널 닫기
+  useEffect(() => {
+    if (!qrClassPickerOpen) return;
+    function onPointerDown(event: MouseEvent) {
+      const root = qrClassPickerRef.current;
+      if (root && !root.contains(event.target as Node)) setQrClassPickerOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setQrClassPickerOpen(false);
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [qrClassPickerOpen]);
+
   // QR 출력: 전체 / 선생님별(1페이지) / 반별(1페이지)
   function printQr(scope: "all" | "teacher" | "class") {
     if (scope === "teacher" && qrTeacherFilter === "all") {
       setMessage("먼저 위에서 선생님을 선택한 뒤 '선생님별 출력'을 눌러주세요.");
       return;
     }
-    if (scope === "class" && qrClassFilter === "all") {
-      setMessage("먼저 위에서 반을 선택한 뒤 '반별 출력'을 눌러주세요.");
+    if (scope === "class" && !qrClassIds.length) {
+      setMessage("먼저 위에서 출력할 반을 하나 이상 선택한 뒤 '선택 반 출력'을 눌러주세요.");
       return;
     }
     if (scope === "all") {
       setQrTeacherFilter("all");
-      setQrClassFilter("all");
+      setQrClassIds([]);
       setQrFitPage(false);
     } else if (scope === "teacher") {
-      setQrClassFilter("all");
+      setQrClassIds([]);
       setQrFitPage(true);
     } else {
-      setQrFitPage(true);
+      // 반을 1개만 선택했을 때만 한 페이지에 맞춰 축소합니다.
+      setQrFitPage(qrClassIds.length === 1);
     }
+    setQrClassPickerOpen(false);
     // 필터/레이아웃이 반영된 뒤 인쇄
     window.setTimeout(() => {
       window.print();
@@ -6410,28 +6466,70 @@ export default function AdminPage() {
             <div className="no-print" style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
               <div>
                 <h1 className="h1">QR 출력</h1>
-                <p className="muted">선생님·반별 QR을 출력해 교실에서 나눠주면 됩니다.</p>
+                <p className="muted">선생님·반별 QR을 출력해 교실에서 나눠주면 됩니다. 반은 검색해서 여러 개 체크한 뒤 '선택 반 출력'을 누르면 해당 반만 인쇄됩니다.</p>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 10, alignItems: "stretch" }}>
                 <div className="btn-row">
-                  <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => { setSelectedQrPeriodId(e.target.value); setQrTeacherFilter("all"); setQrClassFilter("all"); }}>
+                  <select className="select" value={selectedQrPeriod?.id || ""} onChange={(e) => { setSelectedQrPeriodId(e.target.value); setQrTeacherFilter("all"); setQrClassIds([]); setQrClassSearch(""); setQrClassPickerOpen(false); }}>
                     {(data?.periods || []).map((period: any) => <option key={period.id} value={period.id}>{period.title}</option>)}
                   </select>
-                  <select className="select" value={qrTeacherFilter} onChange={(e) => { setQrTeacherFilter(e.target.value); setQrClassFilter("all"); }}>
+                  <select className="select" value={qrTeacherFilter} onChange={(e) => { setQrTeacherFilter(e.target.value); setQrClassIds([]); setQrClassSearch(""); }}>
                     <option value="all">전체 선생님</option>
                     {qrFilterOptions.teachers.map((t: any) => <option key={t.id} value={t.id}>{t.name} 선생님</option>)}
                   </select>
-                  <select className="select" value={qrClassFilter} onChange={(e) => setQrClassFilter(e.target.value)}>
-                    <option value="all">전체 반</option>
-                    {qrFilterOptions.classes.map((c: any) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                  <div className="qr-class-picker" ref={qrClassPickerRef}>
+                    <button
+                      type="button"
+                      className={`select qr-class-picker-toggle${qrClassIds.length ? " active" : ""}`}
+                      onClick={() => setQrClassPickerOpen((v) => !v)}
+                    >
+                      <span className="qr-class-picker-label">{qrClassSummary}</span>
+                      {qrClassIds.length > 1 && <span className="qr-class-picker-count">{qrClassIds.length}</span>}
+                      <span className="qr-class-picker-caret">▾</span>
+                    </button>
+                    {qrClassPickerOpen && (
+                      <div className="qr-class-picker-panel">
+                        <input
+                          className="input"
+                          placeholder="반 이름 검색 (예: 윤슬중2)"
+                          value={qrClassSearch}
+                          onChange={(e) => setQrClassSearch(e.target.value)}
+                          autoFocus
+                        />
+                        <div className="qr-class-picker-actions">
+                          <button
+                            type="button"
+                            className="btn sm secondary"
+                            onClick={() => setQrClassIds((prev) => Array.from(new Set<string>([...prev, ...qrClassSearchResults.map((c: any) => c.id)])))}
+                            disabled={!qrClassSearchResults.length}
+                          >
+                            {qrClassSearch.trim() ? "검색 결과 모두 선택" : "전체 선택"}
+                          </button>
+                          <button type="button" className="btn sm soft" onClick={() => setQrClassIds([])} disabled={!qrClassIds.length}>선택 해제</button>
+                        </div>
+                        <div className="qr-class-picker-list">
+                          {!qrClassSearchResults.length && <p className="muted small" style={{ margin: "8px 4px" }}>표시할 반이 없습니다.</p>}
+                          {qrClassSearchResults.map((c: any) => (
+                            <label className={`qr-class-picker-item${qrClassIds.includes(c.id) ? " checked" : ""}`} key={c.id}>
+                              <input type="checkbox" checked={qrClassIds.includes(c.id)} onChange={() => toggleQrClass(c.id)} />
+                              <span>{c.name}</span>
+                            </label>
+                          ))}
+                        </div>
+                        <div className="qr-class-picker-foot">
+                          <span className="muted small">{qrClassIds.length ? `${qrClassIds.length}개 반 선택됨` : "선택 없음 · 전체 반 출력"}</span>
+                          <button type="button" className="btn sm" onClick={() => setQrClassPickerOpen(false)}>닫기</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="btn-row">
                   <button className="btn secondary" onClick={() => generateQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>{qrBusy ? "QR 생성 중..." : "QR 전체 생성"}</button>
                   <button className="btn danger" onClick={() => deleteAllQrLinks(selectedQrPeriod?.id)} disabled={qrBusy}>QR 전체 삭제</button>
                   <button className="btn" onClick={() => printQr("all")}>전체 출력</button>
                   <button className="btn soft" onClick={() => printQr("teacher")}>선생님별 출력 (1페이지)</button>
-                  <button className="btn soft" onClick={() => printQr("class")}>반별 출력 (1페이지)</button>
+                  <button className="btn soft" onClick={() => printQr("class")}>선택 반 출력</button>
                 </div>
               </div>
             </div>
