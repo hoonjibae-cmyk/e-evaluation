@@ -12,6 +12,37 @@ function AcademyLogo() {
   );
 }
 
+const DEVICE_KEY_STORAGE = "e-evaluation-device-key";
+
+// crypto.randomUUID 가 없는 구형 브라우저/비보안 컨텍스트에서도 동작하도록 대체값을 씁니다.
+function makeDeviceKey() {
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // 아래 대체값으로 진행
+  }
+  return `dk-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+// 사생활 보호 모드 등 localStorage 사용이 막힌 환경에서도 제출이 실패하지 않도록 감쌉니다.
+function readDeviceKey() {
+  try {
+    return localStorage.getItem(DEVICE_KEY_STORAGE) || "";
+  } catch {
+    return "";
+  }
+}
+
+function writeDeviceKey(value: string) {
+  try {
+    localStorage.setItem(DEVICE_KEY_STORAGE, value);
+  } catch {
+    // 저장하지 못해도 제출 자체는 진행합니다.
+  }
+}
+
 export default function SurveyClient({ token }: { token: string }) {
   const [survey, setSurvey] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -49,6 +80,14 @@ export default function SurveyClient({ token }: { token: string }) {
     setStudentName("");
     setAnswers({});
     setAgree(false);
+    // 앞 학생 제출 성공 후 켜진 채로 남아 있던 제출 잠금을 반드시 풀어줍니다.
+    // (풀지 않으면 다음 학생 화면에서 제출 버튼이 '제출 중…' 상태로 비활성화된 채 눌리지 않습니다.)
+    setSubmitting(false);
+    setError("");
+    // 새 학생의 제출이므로 기기 식별값을 새로 발급합니다.
+    // (앞 학생과 이름이 같을 경우 '최근 3분 내 같은 이름·같은 기기' 멱등 처리에 걸려
+    //  뒤 학생 응답이 저장되지 않는 것을 막습니다.)
+    writeDeviceKey(makeDeviceKey());
     if (typeof window !== "undefined") window.scrollTo({ top: 0 });
   }
 
@@ -152,8 +191,8 @@ export default function SurveyClient({ token }: { token: string }) {
     const timeoutId = setTimeout(() => controller.abort(), 25000);
 
     try {
-      const deviceKey = localStorage.getItem("e-evaluation-device-key") || crypto.randomUUID();
-      localStorage.setItem("e-evaluation-device-key", deviceKey);
+      const deviceKey = readDeviceKey() || makeDeviceKey();
+      writeDeviceKey(deviceKey);
 
       const res = await fetch(`/api/survey/${token}/submit`, {
         method: "POST",
@@ -163,6 +202,8 @@ export default function SurveyClient({ token }: { token: string }) {
       });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(body.error || "제출에 실패했습니다.");
+      // 완료 정보가 비어 오면 완료 화면으로 넘어가지 못한 채 제출 잠금만 남습니다.
+      if (!body?.complete) throw new Error("제출 결과를 확인하지 못했습니다. 관리자에게 확인해주세요.");
       setComplete(body.complete);
     } catch (err: any) {
       const aborted = err?.name === "AbortError";
