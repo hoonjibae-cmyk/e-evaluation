@@ -1872,6 +1872,9 @@ export default function AdminPage() {
   const [legacyUploadResult, setLegacyUploadResult] = useState<any>(null);
   const [newAdmin, setNewAdmin] = useState<any>(emptyAdminForm);
   const [adminDrafts, setAdminDrafts] = useState<Record<string, any>>({});
+  const [hrStaffCandidates, setHrStaffCandidates] = useState<any[] | null>(null);
+  const [selectedHrEmpNo, setSelectedHrEmpNo] = useState("");
+  const [hrStaffBusy, setHrStaffBusy] = useState(false);
 
   const appUrl = useMemo(() => {
     const configured = String(process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
@@ -2655,6 +2658,39 @@ export default function AdminPage() {
       setMessage(body?.warning ? `관리자 계정을 저장했습니다. ${body.warning}` : "관리자 계정을 저장했습니다.");
     } catch (error: any) {
       setMessage(error.message);
+    }
+  }
+
+  async function loadHrStaffCandidates() {
+    try {
+      setHrStaffBusy(true);
+      const body = await api("/api/admin/admins/candidates");
+      const items = Array.isArray(body.items) ? body.items : [];
+      setHrStaffCandidates(items);
+      setSelectedHrEmpNo("");
+      setMessage("HR Manager의 e강의평가 접근 가능 재직자 명부를 불러왔습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setHrStaffBusy(false);
+    }
+  }
+
+  async function addHrStaffAccount() {
+    if (!selectedHrEmpNo) return;
+    try {
+      setHrStaffBusy(true);
+      const body = await api("/api/admin/admins/candidates", {
+        method: "POST",
+        body: JSON.stringify({ empNo: selectedHrEmpNo })
+      });
+      setSelectedHrEmpNo("");
+      await loadData();
+      setMessage(`${body.admin.name} 직원을 계정 목록에 추가했습니다. 본인 Slack 로그인은 그대로 필요합니다.`);
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setHrStaffBusy(false);
     }
   }
 
@@ -6181,8 +6217,36 @@ export default function AdminPage() {
             )}
 
             {slackAuthStatus.enforced && (
-              <div className="notice" style={{ marginTop: 18 }}>
-                목록에는 e강의평가에 한 번 이상 Slack으로 로그인한 직원이 나타납니다. 신규 직원은 첫 로그인 시 자동 등록됩니다.
+              <div className="card" style={{ marginTop: 18 }}>
+                <h2 className="h2">로그인 전 직원 추가</h2>
+                <p className="muted small">HR Manager에 등록된 경영지원·교육운영팀 재직자 중 한 명을 선택해 계정 목록에 미리 추가할 수 있습니다. 이름과 권한은 HR Manager에서 가져오며, 실제 접속에는 본인의 Slack 로그인이 필요합니다.</p>
+                <button className="btn secondary" type="button" onClick={loadHrStaffCandidates} disabled={hrStaffBusy}>
+                  {hrStaffBusy ? "처리 중..." : "HR 직원 명부 불러오기"}
+                </button>
+                {hrStaffCandidates && (
+                  <div className="grid grid-3" style={{ marginTop: 12, alignItems: "end" }}>
+                    <Field label="추가할 직원">
+                      <select className="select" value={selectedHrEmpNo} onChange={(e) => setSelectedHrEmpNo(e.target.value)}>
+                        <option value="">직원을 선택해주세요</option>
+                        {hrStaffCandidates
+                          .filter((staff: any) => !(data?.adminProfiles || []).some((admin: any) => admin.email?.toLowerCase() === staff.email))
+                          .map((staff: any) => (
+                            <option key={staff.empNo} value={staff.empNo} disabled={!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staff.email)}>
+                              {staff.name} · {staff.department} · {staff.email || "업무용 이메일 없음"}{staff.slackLinked ? "" : " · Slack 미연동"}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <button className="btn" type="button" onClick={addHrStaffAccount} disabled={!selectedHrEmpNo || hrStaffBusy}>계정 목록에 추가</button>
+                  </div>
+                )}
+                {hrStaffCandidates && hrStaffCandidates.length > 0 && hrStaffCandidates.every((staff: any) =>
+                  (data?.adminProfiles || []).some((admin: any) => admin.email?.toLowerCase() === staff.email)) && (
+                  <p className="muted small" style={{ marginTop: 12 }}>추가할 수 있는 직원이 없습니다. 모든 대상자가 이미 계정 목록에 있습니다.</p>
+                )}
+                {hrStaffCandidates?.length === 0 && (
+                  <p className="muted small" style={{ marginTop: 12 }}>HR Manager 명부에 e강의평가 접근 대상 재직자가 없습니다.</p>
+                )}
               </div>
             )}
 
