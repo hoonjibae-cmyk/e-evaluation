@@ -113,6 +113,56 @@ export type HrEvaluationStaff = {
   slackLinked: true;
 };
 
+export type HrEvaluationCandidate = Omit<HrEvaluationStaff, "slackLinked"> & {
+  slackLinked: boolean;
+};
+
+export function parseHrEvaluationDirectory(payload: unknown): HrEvaluationCandidate[] {
+  if (!payload || typeof payload !== "object") throw new Error("HR directory response is invalid");
+  const data = payload as Record<string, unknown>;
+  if (data.app !== "e-evaluation" || !Array.isArray(data.items) ||
+      !Number.isInteger(data.count) || data.count !== data.items.length) {
+    throw new Error("HR directory response is invalid");
+  }
+  const seenEmpNos = new Set<string>();
+  return data.items.map((item) => {
+    if (!item || typeof item !== "object") throw new Error("HR directory staff is invalid");
+    const row = item as Record<string, unknown>;
+    const allowed = (row.department === "경영지원" && row.role === "admin") ||
+      (row.department === "교육운영팀" && row.role === "operations");
+    if (!allowed || typeof row.empNo !== "string" || !row.empNo.trim() ||
+        typeof row.name !== "string" || !row.name.trim() ||
+        typeof row.email !== "string" || typeof row.slackLinked !== "boolean" ||
+        seenEmpNos.has(row.empNo.trim())) {
+      throw new Error("HR directory staff is invalid");
+    }
+    seenEmpNos.add(row.empNo.trim());
+    return {
+      empNo: row.empNo.trim(),
+      name: row.name.trim(),
+      email: row.email.trim().toLowerCase(),
+      department: row.department,
+      role: row.role,
+      slackLinked: row.slackLinked
+    } as HrEvaluationCandidate;
+  });
+}
+
+export async function listHrEvaluationStaff() {
+  const url = new URL(process.env.HR_DIRECTORY_URL!);
+  if (url.protocol !== "https:") throw new Error("HTTPS HR directory required");
+  url.searchParams.set("app", "e-evaluation");
+  url.searchParams.delete("slackUserId");
+  const response = await fetch(url, {
+    headers: { "x-api-key": process.env.HR_DIRECTORY_API_KEY! },
+    cache: "no-store",
+    redirect: "error",
+    signal: AbortSignal.timeout(10000)
+  });
+  if (!response.ok) throw new Error(`HR directory unavailable (${response.status})`);
+  return parseHrEvaluationDirectory(await response.json());
+}
+
 export function parseHrEvaluationStaff(payload: unknown, identity: SlackIdentity): HrEvaluationStaff | null {
   if (!payload || typeof payload !== "object") return null;
   const data = payload as Record<string, unknown>;
@@ -128,7 +178,7 @@ export function parseHrEvaluationStaff(payload: unknown, identity: SlackIdentity
   return row as unknown as HrEvaluationStaff;
 }
 
-export function roleForStaff(staff: HrEvaluationStaff): AdminRole {
+export function roleForStaff(staff: Pick<HrEvaluationStaff, "department">): AdminRole {
   return staff.department === "경영지원" ? "super_admin" : "general_admin";
 }
 
