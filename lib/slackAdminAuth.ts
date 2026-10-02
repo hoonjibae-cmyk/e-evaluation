@@ -125,9 +125,11 @@ export function parseHrEvaluationDirectory(payload: unknown): HrEvaluationCandid
     throw new Error("HR directory response is invalid");
   }
   const seenEmpNos = new Set<string>();
-  return data.items.map((item) => {
+  return data.items.flatMap((item) => {
     if (!item || typeof item !== "object") throw new Error("HR directory staff is invalid");
     const row = item as Record<string, unknown>;
+    // 교수부는 관리자 계정 후보에서 제외한다. 원장 리포트 수신 후보는 별도 경로에서 읽는다.
+    if (row.department === "교수부" && row.role === "report_viewer") return [];
     const allowed = (row.department === "경영지원" && row.role === "admin") ||
       (row.department === "교육운영팀" && row.role === "operations");
     if (!allowed || typeof row.empNo !== "string" || !row.empNo.trim() ||
@@ -137,14 +139,14 @@ export function parseHrEvaluationDirectory(payload: unknown): HrEvaluationCandid
       throw new Error("HR directory staff is invalid");
     }
     seenEmpNos.add(row.empNo.trim());
-    return {
+    return [{
       empNo: row.empNo.trim(),
       name: row.name.trim(),
       email: row.email.trim().toLowerCase(),
       department: row.department,
       role: row.role,
       slackLinked: row.slackLinked
-    } as HrEvaluationCandidate;
+    } as HrEvaluationCandidate];
   });
 }
 

@@ -184,7 +184,8 @@ const responseImportStatusLabels: Record<string, string> = {
 
 const roleLabels: Record<string, string> = {
   super_admin: "총괄관리자",
-  general_admin: "일반관리자"
+  general_admin: "일반관리자",
+  report_viewer: "원장 리포트 수신 전용"
 };
 
 const tabPermissions: Record<string, string[]> = {
@@ -1875,6 +1876,9 @@ export default function AdminPage() {
   const [hrStaffCandidates, setHrStaffCandidates] = useState<any[] | null>(null);
   const [selectedHrEmpNo, setSelectedHrEmpNo] = useState("");
   const [hrStaffBusy, setHrStaffBusy] = useState(false);
+  const [professorCandidates, setProfessorCandidates] = useState<any[] | null>(null);
+  const [selectedProfessorEmpNo, setSelectedProfessorEmpNo] = useState("");
+  const [professorBusy, setProfessorBusy] = useState(false);
 
   const appUrl = useMemo(() => {
     const configured = String(process.env.NEXT_PUBLIC_APP_URL || "").trim().replace(/\/+$/, "");
@@ -2694,6 +2698,38 @@ export default function AdminPage() {
     }
   }
 
+  async function loadProfessorCandidates() {
+    try {
+      setProfessorBusy(true);
+      const body = await api("/api/admin/admins/report-recipients");
+      setProfessorCandidates(Array.isArray(body.items) ? body.items : []);
+      setSelectedProfessorEmpNo("");
+      setMessage("원장 리포트 수신 후보인 교수부 재직자를 불러왔습니다.");
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setProfessorBusy(false);
+    }
+  }
+
+  async function addProfessorRecipient() {
+    if (!selectedProfessorEmpNo) return;
+    try {
+      setProfessorBusy(true);
+      const body = await api("/api/admin/admins/report-recipients", {
+        method: "POST",
+        body: JSON.stringify({ empNo: selectedProfessorEmpNo })
+      });
+      setSelectedProfessorEmpNo("");
+      await loadData();
+      setMessage(`${body.recipient.name} 직원을 원장 리포트 DM 수신자로 추가했습니다. 관리자 화면 접근 권한은 부여되지 않습니다.`);
+    } catch (error: any) {
+      setMessage(error.message);
+    } finally {
+      setProfessorBusy(false);
+    }
+  }
+
   async function updateAdminAccount(id: string) {
     try {
       setMessage("관리자 계정을 수정하는 중입니다.");
@@ -3413,7 +3449,7 @@ export default function AdminPage() {
       if (isInternal) {
         const firstReason = failureMessages[0] ? ` 첫 실패 사유: ${failureMessages[0]}` : "";
         const slackNotice = internalSlackMessage ? ` ${internalSlackMessage}` : "";
-        const safeNotice = " 선생님/직원 대상 Slack 발송은 차단했습니다.";
+        const safeNotice = " 일반 선생님 대상 Slack 발송은 차단했습니다.";
         if (failedCount || internalSlackFailed) {
           setMessage(`원장 내부 확인용 웹 리포트 링크 ${createdCount}건 생성, 실패 ${failedCount}건.${firstReason}${slackNotice}${safeNotice}`);
         } else {
@@ -3531,7 +3567,7 @@ export default function AdminPage() {
       const periodTitle = link.evaluation_periods?.title || selectedReportPeriod?.title || "강의평가";
       if (!window.confirm(`${periodTitle} 원장 내부 확인용 리포트 링크를 원장 리포트 수신자에게 Slack DM으로 발송할까요?
 
-선생님/직원에게는 발송되지 않습니다.`)) return;
+일반 선생님에게는 발송되지 않습니다.`)) return;
       setSlackBusy(`internal-${link.id}`);
       const body = await api("/api/admin/slack", {
         method: "POST",
@@ -3549,7 +3585,7 @@ export default function AdminPage() {
   async function sendSlackReport(link: any) {
     try {
       if (isInternalShareLink(link)) {
-        setMessage("원장 내부 확인용 리포트는 선생님/직원에게 Slack DM으로 발송할 수 없습니다. 웹 리포트 생성 시 원장 리포트 수신자에게만 DM 발송됩니다.");
+        setMessage("원장 내부 확인용 리포트는 일반 선생님 발송 기능을 사용할 수 없습니다. 지정된 원장 리포트 수신자에게만 DM이 발송됩니다.");
         return;
       }
       const teacherName = link.teachers?.name || "선생님";
@@ -4991,7 +5027,7 @@ export default function AdminPage() {
       targetLabel: isInternal ? "원장 리포트 수신자 전용" : "선택된 선생님",
       teacherSlackAllowed: !isInternal,
       superAdminSlackRequired: isInternal,
-      slackPolicyLabel: isInternal ? "원장 리포트 수신자 Slack DM 필수 / 선생님·직원 발송 차단" : "선생님 Slack DM 발송 가능",
+      slackPolicyLabel: isInternal ? "지정된 원장 리포트 수신자에게만 Slack DM 발송" : "선생님 Slack DM 발송 가능",
       generationGuard: "프론트 확인창 + API 발송 정책 이중 차단",
       deliveryPolicyVersion: APP_VERSION
     };
@@ -5024,7 +5060,7 @@ export default function AdminPage() {
     const policy = reportDeliveryPolicy();
     const kindLabel = kind === "pdf" ? "PDF 자동 생성/저장" : kind === "snapshot" ? "웹 저장본 보관" : "웹 리포트 생성";
     const deliveryLine = reportTemplate === "internal"
-      ? "발송 대상: 원장 리포트 수신자 Slack DM만 발송 / 선생님·직원 발송 차단"
+      ? "발송 대상: 지정된 원장 리포트 수신자 Slack DM만 발송"
       : `발송 대상: ${reportMode === "all" ? `선택월 전체 선생님 ${targetCount}명` : reportTargetLabel()} / 선생님 Slack DM은 링크 관리에서 별도 실행`;
     const disabledLine = reportTemplate === "internal"
       ? "출력 대상/선생님 선택값: 적용하지 않음"
@@ -5041,7 +5077,7 @@ export default function AdminPage() {
       disabledLine,
       "",
       reportTemplate === "internal"
-        ? "확인: 원장 내부 확인용 리포트는 선생님/직원에게 발송되지 않습니다."
+        ? "확인: 원장 내부 확인용 리포트는 지정 수신자에게만 발송됩니다."
         : "확인: 생성 후 리포트 링크 관리에서 Slack 발송 대상과 결과를 다시 확인하세요."
     ].join("\n"));
   }
@@ -6160,10 +6196,10 @@ export default function AdminPage() {
 
         {tab === "admins" && currentAdmin?.role === "super_admin" && (
           <section className="card">
-            <h1 className="h1">관리자 계정</h1>
+            <h1 className="h1">직원 계정과 원장 리포트 수신</h1>
             <p className="muted">
               {slackAuthStatus.enforced
-                ? "직원 이름과 권한은 Slack 로그인 시 HR Manager의 재직·소속 정보를 확인해 자동으로 반영됩니다. 여기서는 계정 사용 여부와 원장 리포트 수신을 관리합니다."
+                ? "직원 이름과 권한은 HR Manager의 재직·소속 정보를 기준으로 합니다. 경영지원·교육운영팀은 Slack으로 로그인하며, 선택한 교수부 직원은 원장 리포트 DM만 받습니다."
                 : "총괄관리자만 접근할 수 있습니다. 일반관리자는 QR 출력, 제출 현황, 결과 분석, 결과지 출력 중심으로 제한됩니다."}
             </p>
 
@@ -6246,6 +6282,36 @@ export default function AdminPage() {
                 )}
                 {hrStaffCandidates?.length === 0 && (
                   <p className="muted small" style={{ marginTop: 12 }}>HR Manager 명부에 e강의평가 접근 대상 재직자가 없습니다.</p>
+                )}
+              </div>
+            )}
+
+            {slackAuthStatus.enforced && (
+              <div className="card" style={{ marginTop: 18 }}>
+                <h2 className="h2">교수부 원장 리포트 수신자</h2>
+                <p className="muted small">교수부 전체가 아닌, 여기에서 직접 선택한 재직자에게만 원장 리포트 Slack DM을 보냅니다. 이 계정은 관리자 화면에 로그인할 수 없고 DM에 담긴 리포트 링크만 열람합니다.</p>
+                <button className="btn secondary" type="button" onClick={loadProfessorCandidates} disabled={professorBusy}>
+                  {professorBusy ? "처리 중..." : "교수부 직원 명부 불러오기"}
+                </button>
+                {professorCandidates && (
+                  <div className="grid grid-3" style={{ marginTop: 12, alignItems: "end" }}>
+                    <Field label="원장 리포트를 받을 직원">
+                      <select className="select" value={selectedProfessorEmpNo} onChange={(e) => setSelectedProfessorEmpNo(e.target.value)}>
+                        <option value="">직원을 선택해주세요</option>
+                        {professorCandidates
+                          .filter((staff: any) => !(data?.adminProfiles || []).some((admin: any) => admin.email?.toLowerCase() === staff.email))
+                          .map((staff: any) => (
+                            <option key={staff.empNo} value={staff.empNo} disabled={!staff.slackLinked || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(staff.email)}>
+                              {staff.name} · {staff.email || "업무용 이메일 없음"}{staff.slackLinked ? "" : " · Slack 미연동"}
+                            </option>
+                          ))}
+                      </select>
+                    </Field>
+                    <button className="btn" type="button" onClick={addProfessorRecipient} disabled={!selectedProfessorEmpNo || professorBusy}>원장 리포트 수신자로 추가</button>
+                  </div>
+                )}
+                {professorCandidates?.length === 0 && (
+                  <p className="muted small" style={{ marginTop: 12 }}>HR Manager에 등록된 교수부 재직자가 없습니다.</p>
                 )}
               </div>
             )}
@@ -7567,7 +7633,7 @@ export default function AdminPage() {
                   <div className="delivery-policy-card warn">
                     <b>원장 내부 확인용</b>
                     <span>원장 리포트 수신자 DM만 허용</span>
-                    <p>출력 대상/선생님 선택을 무시하고 선생님·직원 발송을 차단합니다.</p>
+                    <p>출력 대상/선생님 선택을 무시하고 지정된 원장 리포트 수신자에게만 발송합니다.</p>
                   </div>
                 </div>
               </div>
@@ -7582,7 +7648,7 @@ export default function AdminPage() {
                 <b>결과지 저장 방식</b>
                 <br />[PDF 자동 생성/저장]은 현재 결과지 화면을 PDF 파일로 만들어 Supabase Storage에 저장합니다.
                 <br />[웹 리포트 생성하기]는 선생님에게 공유할 수 있는 /r/토큰 링크를 만듭니다. 링크는 만료되지 않으며 리포트 링크 관리에서 비활성화/재생성할 수 있습니다.
-                <br />단, <b>원장 내부 확인용</b>은 선생님/직원 발송을 차단하고, 생성 완료 시 원장 리포트 수신자에게만 Slack DM을 보냅니다.
+                <br />단, <b>원장 내부 확인용</b>은 일반 선생님 발송을 차단하고, 생성 완료 시 지정된 원장 리포트 수신자에게만 Slack DM을 보냅니다.
                 <br />전체 선생님 일괄 생성은 선생님 수와 응답 수가 많으면 시간이 오래 걸릴 수 있습니다. 원장 내부 확인용은 단일 내부 리포트 1건으로 생성됩니다.
               </div>
             </div>
@@ -7750,7 +7816,7 @@ export default function AdminPage() {
                           ) : (
                             <div className="muted small">{internalLink ? "원장 리포트 DM 이력 없음" : "Slack 발송 이력 없음"}</div>
                           )}
-                          <div className="muted small">{internalLink ? "선생님/직원 발송 차단" : (teacher.slack_email || "Slack 이메일 없음")}</div>
+                          <div className="muted small">{internalLink ? "일반 선생님 발송 차단" : (teacher.slack_email || "Slack 이메일 없음")}</div>
                         </td>
                         <td>
                           <div className="row-actions wrap">

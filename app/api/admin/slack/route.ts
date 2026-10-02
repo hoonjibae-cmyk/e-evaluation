@@ -239,7 +239,7 @@ export async function POST(request: NextRequest) {
         throw new Error("비활성화된 리포트 링크는 발송할 수 없습니다.");
       }
       if (!isInternalReportLink(link)) {
-        throw new Error("원장 내부 확인용으로 생성된 리포트만 총괄관리자 DM으로 발송할 수 있습니다.");
+        throw new Error("원장 내부 확인용으로 생성된 리포트만 지정 수신자 DM으로 발송할 수 있습니다.");
       }
 
       // 수신 대상: 관리자 계정에서 '원장 리포트 수신'을 켠 활성 계정.
@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
 
       const period = link.evaluation_periods;
       const reportUrl = `${originFromRequest(request)}/r/${link.token}`;
-      const messageText = `[원장 내부 확인용 리포트 생성 완료]\n\n평가월: ${period?.title || "강의평가"}\n리포트 유형: 원장 내부 확인용\n확인 링크: ${reportUrl}\n\n※ 본 리포트는 직원/선생님에게 발송되지 않았습니다.`;
+      const messageText = `[원장 내부 확인용 리포트 생성 완료]\n\n평가월: ${period?.title || "강의평가"}\n리포트 유형: 원장 내부 확인용\n확인 링크: ${reportUrl}\n\n※ 지정된 원장 리포트 수신자에게만 DM으로 발송됩니다.`;
 
       let sentCount = 0;
       const failures: string[] = [];
@@ -342,7 +342,7 @@ export async function POST(request: NextRequest) {
         throw new Error("비활성화된 리포트 링크는 발송할 수 없습니다.");
       }
       if (isInternalReportLink(link)) {
-        throw new Error("원장 내부 확인용 리포트는 선생님/직원에게 Slack DM으로 발송할 수 없습니다. 총괄관리자 DM으로만 발송하세요.");
+        throw new Error("원장 내부 확인용 리포트는 일반 선생님 발송 기능을 사용할 수 없습니다. 지정된 원장 리포트 수신자 DM으로만 발송하세요.");
       }
 
       const teacher = link.teachers;

@@ -5,6 +5,7 @@
 //
 // 아직 v2.6.19 SQL을 실행하지 않았거나(컬럼 없음) 지정된 수신자가 한 명도 없으면,
 // 예전처럼 '활성 총괄관리자 전원'으로 되돌아갑니다. (리포트가 아무에게도 안 가는 상황 방지)
+import { listReportRecipientDirectory, profileMatchesHrRecipient } from "./reportRecipientDirectory";
 
 export type InternalReportRecipient = {
   id: string;
@@ -34,6 +35,13 @@ function withEmail(rows: any[]): InternalReportRecipient[] {
 }
 
 export async function loadInternalReportRecipients(supabase: any): Promise<InternalReportRecipientLookup> {
+  // 저장된 수신 체크만 신뢰하지 않고 발송 시점의 HR 재직·소속·Slack 연동을 확인한다.
+  // 퇴사하거나 교수부에서 이동한 직원에게 과거 설정 때문에 DM이 가지 않도록 한다.
+  const staffByEmail = new Map((await listReportRecipientDirectory()).map((staff) => [staff.email, staff]));
+  const eligible = (rows: any[]) => withEmail(rows).filter((row) => {
+    const staff = staffByEmail.get(String(row.email).trim().toLowerCase());
+    return staff && profileMatchesHrRecipient(row, staff);
+  });
   const flagged = await supabase
     .from("admin_profiles")
     .select("id, email, name, role, is_active")
@@ -45,7 +53,7 @@ export async function loadInternalReportRecipients(supabase: any): Promise<Inter
   if (flagged.error && !columnMissing) throw flagged.error;
 
   if (!columnMissing) {
-    const rows = withEmail(flagged.data);
+    const rows = eligible(flagged.data);
     if (rows.length) {
       return { recipients: rows, usedSuperAdminFallback: false, columnMissing: false };
     }
@@ -61,7 +69,7 @@ export async function loadInternalReportRecipients(supabase: any): Promise<Inter
   if (superAdmins.error) throw superAdmins.error;
 
   return {
-    recipients: withEmail(superAdmins.data),
+    recipients: eligible(superAdmins.data),
     usedSuperAdminFallback: true,
     columnMissing
   };
