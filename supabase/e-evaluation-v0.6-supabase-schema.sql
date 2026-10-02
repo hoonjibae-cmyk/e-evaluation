@@ -21,7 +21,7 @@ create table if not exists public.admin_profiles (
   email text not null,
   name text not null,
   role text not null default 'general_admin'
-    check (role in ('super_admin', 'general_admin')),
+    check (role in ('super_admin', 'general_admin', 'report_viewer')),
   is_active boolean not null default true,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()

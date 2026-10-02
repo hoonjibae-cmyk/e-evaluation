@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { parseHrEvaluationDirectory, parseHrEvaluationStaff, parseOAuthFlow, roleForStaff, signOAuthFlow } from "../lib/slackAdminAuth.ts";
+import { parseReportRecipientDirectory, profileMatchesHrRecipient } from "../lib/reportRecipientDirectory.ts";
 
 const identity = { email: "employee@example.com", slackUserId: "U_EMPLOYEE" };
 const management = {
@@ -21,6 +22,7 @@ test("교육운영팀은 일반관리자로 연결하고 다른 부서는 차단
   assert.ok(staff);
   assert.equal(roleForStaff(staff), "general_admin");
   assert.equal(parseHrEvaluationStaff({ ...operations, items: [{ ...operations.items[0], department: "교수부", role: "user" }] }, identity), null);
+  assert.equal(parseHrEvaluationStaff({ ...operations, items: [{ ...operations.items[0], department: "교수부", role: "report_viewer" }] }, identity), null);
 });
 
 test("Slack 이메일·연동 및 앱별 명부가 일치하지 않으면 차단한다", () => {
@@ -42,6 +44,21 @@ test("로그인 전 직원도 HR 명부에서 조회하되 허용 부서와 권�
   assert.throws(() => parseHrEvaluationDirectory({ ...directory, items: [directory.items[0], { ...directory.items[1], department: "교수부" }] }));
   assert.throws(() => parseHrEvaluationDirectory({ ...directory, count: 3 }));
   assert.throws(() => parseHrEvaluationDirectory({ ...directory, items: [directory.items[0], { ...directory.items[1], empNo: "E001" }] }));
+  const withProfessor = { ...directory, count: 3, items: [...directory.items,
+    { empNo: "E003", name: "교수부 직원", email: "teacher@example.com", department: "교수부", role: "report_viewer", slackLinked: true }] };
+  assert.equal(parseHrEvaluationDirectory(withProfessor).length, 2);
+});
+
+test("교수부는 원장 리포트 수신 후보로만 조회하고 현재 재직·Slack 연동을 확인한다", () => {
+  const teacher = { empNo: "E003", name: "교수부 직원", email: "TEACHER@example.com",
+    department: "교수부", role: "report_viewer", slackLinked: true };
+  const [staff] = parseReportRecipientDirectory({ app: "e-evaluation", count: 1, items: [teacher] });
+  const profile = { email: "teacher@example.com", role: "report_viewer" };
+  assert.equal(profileMatchesHrRecipient(profile, staff), true);
+  assert.equal(profileMatchesHrRecipient({ ...profile, role: "general_admin" }, staff), false);
+  assert.equal(profileMatchesHrRecipient(profile, { ...staff, slackLinked: false }), false);
+  assert.throws(() => parseReportRecipientDirectory({ app: "e-evaluation", count: 1,
+    items: [{ ...teacher, role: "admin" }] }));
 });
 
 test("OAuth 상태 쿠키는 서명·만료를 검증한다", () => {
