@@ -4017,7 +4017,7 @@ export default function AdminPage() {
           formatDateTime(response.submitted_at || response.created_at),
           (periodsById.get(response.evaluation_period_id) as any)?.title || response.evaluation_periods?.title || "",
           (teachersById.get(response.teacher_id) as any)?.name || response.teachers?.name || "",
-          (classesById.get(response.class_id) as any)?.name || response.classes?.name || "",
+          responseClassName(response),
           response.student_name || "",
           responseStatusLabels(response).join(", "),
           response.is_hidden ? "숨김" : "표시",
@@ -4034,7 +4034,7 @@ export default function AdminPage() {
             formatDateTime(response.submitted_at || response.created_at),
             (periodsById.get(response.evaluation_period_id) as any)?.title || "",
             (teachersById.get(response.teacher_id) as any)?.name || "",
-            (classesById.get(response.class_id) as any)?.name || "",
+            responseClassName(response),
             index + 1,
             question.code || "",
             String(question.title || "").replace("{teacher_name}", (teachersById.get(response.teacher_id) as any)?.name || ""),
@@ -4064,7 +4064,7 @@ export default function AdminPage() {
         ...(data?.classScores || []).filter(periodFilter).map((row: any) => [
           (periodsById.get(row.evaluation_period_id) as any)?.title || "",
           row.teacher_name || (teachersById.get(row.teacher_id) as any)?.name || "",
-          row.class_name || (classesById.get(row.class_id) as any)?.name || "",
+          displayClassNameFor(row.evaluation_period_id, row.teacher_id, row.class_id, row.class_name || (classesById.get(row.class_id) as any)?.name || ""),
           row.avg_score_100 ?? "",
           row.response_count ?? ""
         ])
@@ -4076,7 +4076,7 @@ export default function AdminPage() {
           formatDateTime(row.created_at),
           row.evaluation_periods?.title || (periodsById.get(row.evaluation_period_id) as any)?.title || "",
           row.teachers?.name || (teachersById.get(row.teacher_id) as any)?.name || "",
-          row.classes?.name || (classesById.get(row.class_id) as any)?.name || "",
+          displayClassNameFor(row.evaluation_period_id, row.teacher_id, row.class_id, row.classes?.name || (classesById.get(row.class_id) as any)?.name || ""),
           row.is_active === false ? "비활성" : "사용중",
           row.token || "",
           row.view_count ?? ""
@@ -4463,6 +4463,17 @@ export default function AdminPage() {
     return map;
   }, [data]);
 
+  // (평가월 + 선생님 + 반) 조합으로 그 달의 반 표시 이름을 찾습니다.
+  // 집계 뷰(v_teacher_class_monthly_scores)는 classes.name(원래 반 이름)만 내려주므로,
+  // 결과 분석/백업처럼 집계 행을 쓰는 화면은 반드시 이 함수를 거쳐야 그 달에 매칭한 반 이름이 나옵니다.
+  function displayClassNameFor(periodId: any, teacherId: any, classId: any, fallback = "") {
+    if (periodId && teacherId && classId) {
+      const hit = classDisplayNames.get(`${periodId}|${teacherId}|${classId}`);
+      if (hit) return hit;
+    }
+    return fallback;
+  }
+
   // 응답의 반 이름: 해당 평가월 배정의 표시 이름(class_display_name)이 있으면 그것을 사용합니다.
   function responseClassName(response: any) {
     if (!response) return "반 미지정";
@@ -4720,7 +4731,7 @@ export default function AdminPage() {
       const existing = map.get(key) || {
         key,
         teacherName: response.teachers?.name || "-",
-        className: response.classes?.name || "반 미지정",
+        className: responseClassName(response),
         total: 0,
         flagged: 0,
         duplicate: 0,
@@ -4756,6 +4767,7 @@ export default function AdminPage() {
         response.student_name,
         response.teachers?.name,
         response.classes?.name,
+        responseClassName(response),
         response.flag_reason,
         response.duplicate_reason,
         ...getAnswers(response).map((answer: any) => answerDisplay(answer))
@@ -4785,6 +4797,7 @@ export default function AdminPage() {
           response.student_name,
           response.teachers?.name,
           response.classes?.name,
+          responseClassName(response),
           response.hidden_reason,
           response.flag_reason,
           response.duplicate_reason
@@ -7123,7 +7136,7 @@ export default function AdminPage() {
               <div className="card">
                 <h2 className="h2">반별 점수</h2>
                 {currentPeriodClassScores.map((row: any) => (
-                  <Bar key={`${row.teacher_id}-${row.class_id}`} label={`${row.teacher_name} · ${row.class_name}`} value={Number(row.avg_score_100 || 0)} max={100} suffix="점" />
+                  <Bar key={`${row.teacher_id}-${row.class_id}`} label={`${row.teacher_name} · ${displayClassNameFor(row.evaluation_period_id, row.teacher_id, row.class_id, row.class_name || "반 미지정")}`} value={Number(row.avg_score_100 || 0)} max={100} suffix="점" />
                 ))}
                 {!currentPeriodClassScores.length && <Empty message="반별 점수 데이터가 없습니다." />}
               </div>
