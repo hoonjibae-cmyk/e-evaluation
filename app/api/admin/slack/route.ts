@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, logAction } from "@/lib/adminGuard";
 import { getSupabaseAdmin, getAppUrl } from "@/lib/supabaseServer";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { loadInternalReportRecipients } from "@/lib/internalReportRecipients";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -241,18 +242,12 @@ export async function POST(request: NextRequest) {
         throw new Error("원장 내부 확인용으로 생성된 리포트만 총괄관리자 DM으로 발송할 수 있습니다.");
       }
 
-      const adminsRes = await supabase
-        .from("admin_profiles")
-        .select("id, email, name, role, is_active")
-        .eq("role", "super_admin")
-        .eq("is_active", true)
-        .order("created_at", { ascending: true });
-
-      if (adminsRes.error) throw adminsRes.error;
-
-      const admins = (adminsRes.data || []).filter((admin: any) => String(admin.email || "").includes("@"));
+      // 수신 대상: 관리자 계정에서 '원장 리포트 수신'을 켠 활성 계정.
+      // (지정된 수신자가 없거나 아직 SQL을 실행하지 않았다면 기존처럼 활성 총괄관리자 전원)
+      const recipientLookup = await loadInternalReportRecipients(supabase);
+      const admins = recipientLookup.recipients;
       if (!admins.length) {
-        throw new Error("활성화된 총괄관리자 이메일을 찾지 못했습니다. 관리자 계정의 이메일을 확인해주세요.");
+        throw new Error("원장 리포트를 받을 관리자 계정을 찾지 못했습니다. 관리자 계정 메뉴에서 '원장 리포트 수신'을 켜고 Slack 계정과 같은 이메일을 입력해주세요.");
       }
 
       const period = link.evaluation_periods;
@@ -305,19 +300,26 @@ export async function POST(request: NextRequest) {
       }
 
       if (sentCount === 0) {
-        throw new Error(`총괄관리자 Slack DM 발송 실패: ${failures[0] || "Slack 계정 이메일을 확인해주세요."}`);
+        throw new Error(`원장 리포트 Slack DM 발송 실패: ${failures[0] || "Slack 계정 이메일을 확인해주세요."}`);
       }
 
-      await logAction(supabase, guard.admin, "send_internal_report_to_super_admin", "teacher_report_share_links", link.id, {
+      await logAction(supabase, guard.admin, "send_internal_report_to_recipients", "teacher_report_share_links", link.id, {
         evaluationPeriodId: link.evaluation_period_id,
         sentCount,
-        failures
+        failures,
+        usedSuperAdminFallback: recipientLookup.usedSuperAdminFallback,
+        recipientEmails: admins.map((admin: any) => admin.email)
       });
 
       const failureNotice = failures.length ? ` 실패 ${failures.length}건: ${failures[0]}` : "";
+      const fallbackNotice = recipientLookup.columnMissing
+        ? " (수신자 지정 기능 SQL이 아직 실행되지 않아 총괄관리자 전원에게 보냈습니다.)"
+        : recipientLookup.usedSuperAdminFallback
+          ? " (지정된 수신자가 없어 총괄관리자 전원에게 보냈습니다.)"
+          : "";
       return NextResponse.json({
         ok: true,
-        message: `총괄관리자 Slack DM ${sentCount}건을 발송했습니다.${failureNotice}`
+        message: `원장 리포트 Slack DM ${sentCount}건을 발송했습니다.${failureNotice}${fallbackNotice}`
       });
     }
 

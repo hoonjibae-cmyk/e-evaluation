@@ -5,7 +5,7 @@ import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "
 import QRCode from "qrcode";
 import { formatScore, maskTeacherName, monthLabel } from "@/lib/score";
 
-const APP_VERSION = "v2.6.18";
+const APP_VERSION = "v2.6.19";
 const TOAST_AUTO_CLOSE_MS = 9000;
 const REPORT_CLASS_MAPPINGS_STORAGE_KEY = "e-evaluation-report-class-mappings-v267";
 const VERCEL_SAFE_UPLOAD_BYTES = 4 * 1024 * 1024;
@@ -303,7 +303,8 @@ const emptyAdminForm = {
   role: "general_admin",
   password: "",
   memo: "",
-  is_active: true
+  is_active: true,
+  receives_internal_report: false
 };
 
 
@@ -2063,6 +2064,7 @@ export default function AdminPage() {
         role: admin.role || "general_admin",
         memo: admin.memo || "",
         is_active: admin.is_active !== false,
+        receives_internal_report: admin.receives_internal_report === true,
         password: ""
       };
     }
@@ -2608,13 +2610,13 @@ export default function AdminPage() {
   async function createAdminAccount() {
     try {
       setMessage("관리자 계정을 저장하는 중입니다.");
-      await api("/api/admin/admins", {
+      const body = await api("/api/admin/admins", {
         method: "POST",
         body: JSON.stringify(newAdmin)
       });
       setNewAdmin(emptyAdminForm);
       await loadData();
-      setMessage("관리자 계정을 저장했습니다.");
+      setMessage(body?.warning ? `관리자 계정을 저장했습니다. ${body.warning}` : "관리자 계정을 저장했습니다.");
     } catch (error: any) {
       setMessage(error.message);
     }
@@ -2623,12 +2625,12 @@ export default function AdminPage() {
   async function updateAdminAccount(id: string) {
     try {
       setMessage("관리자 계정을 수정하는 중입니다.");
-      await api("/api/admin/admins", {
+      const body = await api("/api/admin/admins", {
         method: "PATCH",
         body: JSON.stringify({ id, ...(adminDrafts[id] || {}) })
       });
       await loadData();
-      setMessage("관리자 계정을 수정했습니다.");
+      setMessage(body?.warning ? `관리자 계정을 수정했습니다. ${body.warning}` : "관리자 계정을 수정했습니다.");
     } catch (error: any) {
       setMessage(error.message);
     }
@@ -3266,7 +3268,7 @@ export default function AdminPage() {
       setWebReportBusy(true);
       setMessage(
         isInternal
-          ? "원장 내부 확인용 웹 리포트 링크를 생성하고 총괄관리자 Slack DM을 준비하는 중입니다."
+          ? "원장 내부 확인용 웹 리포트 링크를 생성하고 원장 리포트 수신자 Slack DM을 준비하는 중입니다."
           : `웹 리포트 링크 ${reportNodes.length}건을 생성하는 중입니다. 실패하면 첫 번째 실패 사유를 화면에 표시합니다.`
       );
 
@@ -3326,10 +3328,10 @@ export default function AdminPage() {
               shareLinkId: internalShareLinkId
             })
           });
-          internalSlackMessage = slackBody?.message || "총괄관리자 Slack DM을 발송했습니다.";
+          internalSlackMessage = slackBody?.message || "원장 리포트 Slack DM을 발송했습니다.";
         } catch (error: any) {
           internalSlackFailed = true;
-          internalSlackMessage = `총괄관리자 Slack DM 발송 실패: ${error?.message || "알 수 없는 오류"}`;
+          internalSlackMessage = `원장 리포트 Slack DM 발송 실패: ${error?.message || "알 수 없는 오류"}`;
         }
       }
 
@@ -3451,11 +3453,11 @@ export default function AdminPage() {
   async function sendInternalSlackReport(link: any) {
     try {
       if (!isInternalShareLink(link)) {
-        setMessage("총괄관리자 DM은 원장 내부 확인용 리포트에만 사용할 수 있습니다.");
+        setMessage("원장 리포트 DM은 원장 내부 확인용 리포트에만 사용할 수 있습니다.");
         return;
       }
       const periodTitle = link.evaluation_periods?.title || selectedReportPeriod?.title || "강의평가";
-      if (!window.confirm(`${periodTitle} 원장 내부 확인용 리포트 링크를 총괄관리자에게 Slack DM으로 발송할까요?
+      if (!window.confirm(`${periodTitle} 원장 내부 확인용 리포트 링크를 원장 리포트 수신자에게 Slack DM으로 발송할까요?
 
 선생님/직원에게는 발송되지 않습니다.`)) return;
       setSlackBusy(`internal-${link.id}`);
@@ -3464,9 +3466,9 @@ export default function AdminPage() {
         body: JSON.stringify({ action: "send_internal_report", shareLinkId: link.id })
       });
       await loadData();
-      setMessage(body.message || "총괄관리자 Slack DM을 발송했습니다.");
+      setMessage(body.message || "원장 리포트 Slack DM을 발송했습니다.");
     } catch (error: any) {
-      setMessage(`총괄관리자 Slack DM 발송 실패: ${error.message}`);
+      setMessage(`원장 리포트 Slack DM 발송 실패: ${error.message}`);
     } finally {
       setSlackBusy("");
     }
@@ -3475,7 +3477,7 @@ export default function AdminPage() {
   async function sendSlackReport(link: any) {
     try {
       if (isInternalShareLink(link)) {
-        setMessage("원장 내부 확인용 리포트는 선생님/직원에게 Slack DM으로 발송할 수 없습니다. 웹 리포트 생성 시 총괄관리자에게만 DM 발송됩니다.");
+        setMessage("원장 내부 확인용 리포트는 선생님/직원에게 Slack DM으로 발송할 수 없습니다. 웹 리포트 생성 시 원장 리포트 수신자에게만 DM 발송됩니다.");
         return;
       }
       const teacherName = link.teachers?.name || "선생님";
@@ -4914,10 +4916,10 @@ export default function AdminPage() {
       audience: isInternal ? "director_internal" : "teacher_delivery",
       internalOnly: isInternal,
       templateLabel: reportTemplateLabel(template),
-      targetLabel: isInternal ? "총괄관리자 전용" : "선택된 선생님",
+      targetLabel: isInternal ? "원장 리포트 수신자 전용" : "선택된 선생님",
       teacherSlackAllowed: !isInternal,
       superAdminSlackRequired: isInternal,
-      slackPolicyLabel: isInternal ? "총괄관리자 Slack DM 필수 / 선생님·직원 발송 차단" : "선생님 Slack DM 발송 가능",
+      slackPolicyLabel: isInternal ? "원장 리포트 수신자 Slack DM 필수 / 선생님·직원 발송 차단" : "선생님 Slack DM 발송 가능",
       generationGuard: "프론트 확인창 + API 발송 정책 이중 차단",
       deliveryPolicyVersion: APP_VERSION
     };
@@ -4950,7 +4952,7 @@ export default function AdminPage() {
     const policy = reportDeliveryPolicy();
     const kindLabel = kind === "pdf" ? "PDF 자동 생성/저장" : kind === "snapshot" ? "웹 저장본 보관" : "웹 리포트 생성";
     const deliveryLine = reportTemplate === "internal"
-      ? "발송 대상: 총괄관리자 Slack DM만 발송 / 선생님·직원 발송 차단"
+      ? "발송 대상: 원장 리포트 수신자 Slack DM만 발송 / 선생님·직원 발송 차단"
       : `발송 대상: ${reportMode === "all" ? `선택월 전체 선생님 ${targetCount}명` : reportTargetLabel()} / 선생님 Slack DM은 링크 관리에서 별도 실행`;
     const disabledLine = reportTemplate === "internal"
       ? "출력 대상/선생님 선택값: 적용하지 않음"
@@ -4986,7 +4988,7 @@ export default function AdminPage() {
         <div className="delivery-policy-head">
           <div>
             <h2 className="h2">저장/발송 환경 점검</h2>
-            <p className="muted small">Supabase 연결, Storage PDF 저장 권한, 웹 링크 테이블, Slack Bot Token, 총괄관리자 DM 대상을 한 번에 확인합니다.</p>
+            <p className="muted small">Supabase 연결, Storage PDF 저장 권한, 웹 링크 테이블, Slack Bot Token, 원장 리포트 수신 대상을 한 번에 확인합니다.</p>
           </div>
           <button
             className="btn secondary"
@@ -5007,7 +5009,7 @@ export default function AdminPage() {
             </div>
             <div className={diagnosticsResult.ok ? "notice small" : "notice danger small"} style={{ marginTop: 12, whiteSpace: "pre-line" }}>
               <b>{diagnosticsResult.message || (diagnosticsResult.ok ? "환경 점검 통과" : "환경 점검 확인 필요")}</b>
-              <br />원장 내부 확인용 리포트는 Storage 저장이 성공하더라도 Slack Bot Token과 총괄관리자 이메일이 맞지 않으면 DM 발송에 실패할 수 있습니다.
+              <br />원장 내부 확인용 리포트는 Storage 저장이 성공하더라도 Slack Bot Token과 수신자 이메일이 맞지 않으면 DM 발송에 실패할 수 있습니다.
             </div>
             <div className="table-wrap" style={{ marginTop: 12 }}>
               <table>
@@ -6106,6 +6108,22 @@ export default function AdminPage() {
                     <option value="inactive">비활성</option>
                   </select>
                 </Field>
+                <Field label="원장 리포트 수신">
+                  <label className="choice" style={{ justifyContent: "flex-start" }}>
+                    <input
+                      type="checkbox"
+                      checked={newAdmin.receives_internal_report === true}
+                      onChange={(e) => setNewAdmin({ ...newAdmin, receives_internal_report: e.target.checked })}
+                    />
+                    <span>원장 내부 확인용 리포트 Slack DM 받기</span>
+                  </label>
+                </Field>
+              </div>
+              <div className="notice small" style={{ marginTop: 12 }}>
+                <b>원장 리포트 수신 대상</b><br />
+                '원장 내부 확인용' 웹 리포트를 생성하면 여기서 체크한 관리자에게 Slack DM으로 링크가 발송됩니다.
+                권한(총괄/일반)과는 별개로 동작하므로, 일반관리자에게 총괄관리자 권한을 주지 않고도 리포트만 받게 할 수 있습니다.
+                <br />Slack 계정과 <b>같은 이메일</b>을 입력해야 DM이 도착합니다. 체크된 사람이 한 명도 없으면 기존처럼 활성 총괄관리자 전원에게 발송됩니다.
               </div>
               <button className="btn" style={{ marginTop: 12 }} onClick={createAdminAccount}>관리자 계정 저장</button>
             </div>
@@ -6118,6 +6136,7 @@ export default function AdminPage() {
                     <th>이름</th>
                     <th>권한</th>
                     <th>상태</th>
+                    <th>원장 리포트 수신</th>
                     <th>마지막 로그인</th>
                     <th>비밀번호 재설정</th>
                     <th>기능</th>
@@ -6143,6 +6162,16 @@ export default function AdminPage() {
                             <option value="active">사용중</option>
                             <option value="inactive">비활성</option>
                           </select>
+                        </td>
+                        <td>
+                          <label className="choice" style={{ justifyContent: "flex-start" }}>
+                            <input
+                              type="checkbox"
+                              checked={(draft.receives_internal_report ?? admin.receives_internal_report) === true}
+                              onChange={(e) => setAdminDrafts({ ...adminDrafts, [admin.id]: { ...draft, receives_internal_report: e.target.checked } })}
+                            />
+                            <span className="small">받기</span>
+                          </label>
                         </td>
                         <td>{formatDateTime(admin.last_login_at)}</td>
                         <td>
@@ -7206,7 +7235,7 @@ export default function AdminPage() {
                   PDF 생성 후 열기
                 </button>
                 <button className="btn soft" onClick={createWebReportLinks} disabled={webReportBusy}>
-                  {webReportBusy ? "웹 리포트 생성 중..." : (isInternalReportTemplate ? "내부 웹 리포트 생성 + 총괄관리자 DM" : "웹 리포트 생성하기")}
+                  {webReportBusy ? "웹 리포트 생성 중..." : (isInternalReportTemplate ? "내부 웹 리포트 생성 + 원장 리포트 DM" : "웹 리포트 생성하기")}
                 </button>
               </div>
               <p className="muted" style={{ marginTop: 10 }}>
@@ -7252,7 +7281,7 @@ export default function AdminPage() {
                   >
                     {(data?.teachers || []).map((teacher: any) => <option key={teacher.id} value={teacher.id}>{teacher.name} 선생님</option>)}
                   </select>
-                  {isInternalReportTemplate ? <p className="muted small" style={{ marginTop: 6 }}>선생님 선택은 비활성화됩니다. 생성 후 총괄관리자 Slack DM으로만 전달됩니다.</p> : null}
+                  {isInternalReportTemplate ? <p className="muted small" style={{ marginTop: 6 }}>선생님 선택은 비활성화됩니다. 생성 후 원장 리포트 수신자 Slack DM으로만 전달됩니다.</p> : null}
                 </Field>
                 <Field label={isInternalReportTemplate ? "내부 리포트 기준" : "1페이지 점수표 기간"}>
                   {isInternalReportTemplate ? (
@@ -7411,7 +7440,7 @@ export default function AdminPage() {
                   </div>
                   <div className="delivery-policy-card warn">
                     <b>원장 내부 확인용</b>
-                    <span>총괄관리자 DM만 허용</span>
+                    <span>원장 리포트 수신자 DM만 허용</span>
                     <p>출력 대상/선생님 선택을 무시하고 선생님·직원 발송을 차단합니다.</p>
                   </div>
                 </div>
@@ -7427,7 +7456,7 @@ export default function AdminPage() {
                 <b>결과지 저장 방식</b>
                 <br />[PDF 자동 생성/저장]은 현재 결과지 화면을 PDF 파일로 만들어 Supabase Storage에 저장합니다.
                 <br />[웹 리포트 생성하기]는 선생님에게 공유할 수 있는 /r/토큰 링크를 만듭니다. 링크는 만료되지 않으며 리포트 링크 관리에서 비활성화/재생성할 수 있습니다.
-                <br />단, <b>원장 내부 확인용</b>은 선생님/직원 발송을 차단하고, 생성 완료 시 총괄관리자에게만 Slack DM을 보냅니다.
+                <br />단, <b>원장 내부 확인용</b>은 선생님/직원 발송을 차단하고, 생성 완료 시 원장 리포트 수신자에게만 Slack DM을 보냅니다.
                 <br />전체 선생님 일괄 생성은 선생님 수와 응답 수가 많으면 시간이 오래 걸릴 수 있습니다. 원장 내부 확인용은 단일 내부 리포트 1건으로 생성됩니다.
               </div>
             </div>
@@ -7544,7 +7573,7 @@ export default function AdminPage() {
               <br />선생님 관리에서 Slack 이메일을 입력하고 [Slack 연결 확인]을 먼저 실행하세요.
               <br />Vercel 환경변수 <b>SLACK_BOT_TOKEN</b>이 있어야 DM 발송이 됩니다. 이 값에는 NEXT_PUBLIC_을 붙이면 안 됩니다.
               <br />Slack App 권한은 chat:write, im:write, users:read.email을 권장합니다.
-              <br /><b>원장 내부 확인용</b> 링크는 선생님 DM 버튼이 표시되지 않고, 총괄관리자 DM 재발송 버튼만 사용할 수 있습니다.
+              <br /><b>원장 내부 확인용</b> 링크는 선생님 DM 버튼이 표시되지 않고, 원장 리포트 DM 재발송 버튼만 사용할 수 있습니다.
             </div>
 
             <div className="table-wrap" style={{ marginTop: 18 }}>
@@ -7574,7 +7603,7 @@ export default function AdminPage() {
                         <td>{internalLink ? <span className="badge warn">원장 내부 확인용</span> : (teacher.name ? `${teacher.name} 선생님` : "-")}</td>
                         <td>
                           <span className={internalLink ? "badge warn" : "badge"}>{link.teacher_report_exports?.pages?.templateLabel || (internalLink ? "원장 내부 확인용" : "선생님 전달용")}</span>
-                          <div className="muted small">{internalLink ? "총괄관리자 전용 · 직원 발송 차단" : "선생님 발송 가능"}</div>
+                          <div className="muted small">{internalLink ? "원장 리포트 수신자 전용 · 직원 발송 차단" : "선생님 발송 가능"}</div>
                         </td>
                         <td>
                           {link.is_active !== false ? <span className="badge ok">사용중</span> : <span className="badge danger">비활성</span>}
@@ -7585,7 +7614,7 @@ export default function AdminPage() {
                           <div className="muted small">마지막: {link.last_viewed_at ? formatDateTime(link.last_viewed_at) : "-"}</div>
                         </td>
                         <td>
-                          {internalLink ? <span className="badge warn">총괄관리자 전용</span> : (teacher.slack_user_id ? <span className="badge ok">연결됨</span> : <span className="badge">미연결</span>)}
+                          {internalLink ? <span className="badge warn">원장 리포트 전용</span> : (teacher.slack_user_id ? <span className="badge ok">연결됨</span> : <span className="badge">미연결</span>)}
                           {latestSlackLog ? (
                             <div style={{ marginTop: 6 }}>
                               {latestSlackLog.status === "sent" ? <span className="badge ok">발송 완료</span> : <span className="badge danger">발송 실패</span>}
@@ -7593,7 +7622,7 @@ export default function AdminPage() {
                               {latestSlackLog.error_message ? <div className="muted small">{latestSlackLog.error_message}</div> : null}
                             </div>
                           ) : (
-                            <div className="muted small">{internalLink ? "총괄관리자 DM 이력 없음" : "Slack 발송 이력 없음"}</div>
+                            <div className="muted small">{internalLink ? "원장 리포트 DM 이력 없음" : "Slack 발송 이력 없음"}</div>
                           )}
                           <div className="muted small">{internalLink ? "선생님/직원 발송 차단" : (teacher.slack_email || "Slack 이메일 없음")}</div>
                         </td>
@@ -7602,7 +7631,7 @@ export default function AdminPage() {
                             <button className="btn secondary" onClick={() => window.open(url, "_blank", "noopener,noreferrer")}>웹 링크 열기</button>
                             {internalLink ? (
                               <button className="btn soft" onClick={() => sendInternalSlackReport(link)} disabled={slackBusy === `internal-${link.id}` || link.is_active === false}>
-                                {slackBusy === `internal-${link.id}` ? "총괄관리자 DM 발송 중..." : "총괄관리자 DM 발송"}
+                                {slackBusy === `internal-${link.id}` ? "원장 리포트 DM 발송 중..." : "원장 리포트 DM 발송"}
                               </button>
                             ) : (
                               <button className="btn" onClick={() => sendSlackReport(link)} disabled={slackBusy === `send-${link.id}` || link.is_active === false}>
@@ -7644,7 +7673,7 @@ export default function AdminPage() {
                     {(data?.slackMessageLogs || []).length ? (data?.slackMessageLogs || []).slice(0, 30).map((log: any) => (
                       <tr key={log.id}>
                         <td>{formatDateTime(log.created_at)}</td>
-                        <td>{log.teachers?.name ? `${log.teachers.name} 선생님` : (log.teacher_id ? "-" : "총괄관리자")}</td>
+                        <td>{log.teachers?.name ? `${log.teachers.name} 선생님` : (log.teacher_id ? "-" : "원장 리포트 수신자")}</td>
                         <td>{log.evaluation_periods?.title || "-"}</td>
                         <td>{log.status === "sent" ? <span className="badge ok">발송 성공</span> : <span className="badge danger">발송 실패</span>}</td>
                         <td>{log.error_message || "-"}</td>

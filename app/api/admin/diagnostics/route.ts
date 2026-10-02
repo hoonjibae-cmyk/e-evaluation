@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, logAction } from "@/lib/adminGuard";
 import { getSupabaseAdmin, getSupabaseEnvStatus, getAppUrl } from "@/lib/supabaseServer";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { loadInternalReportRecipients } from "@/lib/internalReportRecipients";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -336,63 +337,58 @@ async function checkSlackAuth(token: string) {
 
 async function checkSuperAdmins(supabase: ReturnType<typeof getSupabaseAdmin>) {
   try {
-    const adminsRes = await supabase
-      .from("admin_profiles")
-      .select("id, email, name, role, is_active")
-      .eq("role", "super_admin")
-      .eq("is_active", true)
-      .order("created_at", { ascending: true });
+    const lookup = await loadInternalReportRecipients(supabase);
+    const recipients = lookup.recipients;
 
-    if (adminsRes.error) {
+    if (!recipients.length) {
       return checkRow(
         "super_admins",
-        "총괄관리자 DM 대상",
+        "원장 리포트 수신 대상",
         "fail",
-        "활성 총괄관리자 계정을 확인하지 못했습니다.",
-        toSafeErrorMessage(adminsRes.error),
-        "관리자 계정 메뉴와 admin_profiles 테이블을 확인하세요."
+        "원장 리포트를 받을 관리자 계정이 없습니다.",
+        "관리자 계정 중 '원장 리포트 수신'이 켜진 활성 계정도, 활성 총괄관리자도 찾지 못했습니다.",
+        "관리자 계정 메뉴에서 수신 대상을 1명 이상 지정하고, Slack 계정과 같은 이메일을 입력하세요."
       );
     }
 
-    const admins = adminsRes.data || [];
-    const adminsWithEmail = admins.filter((admin: any) => String(admin.email || "").includes("@"));
+    const emails = recipients.map((admin: any) => admin.email).join(", ");
 
-    if (!admins.length) {
+    if (lookup.columnMissing) {
       return checkRow(
         "super_admins",
-        "총괄관리자 DM 대상",
-        "fail",
-        "활성 총괄관리자 계정이 없습니다.",
-        "원장 내부 확인용 리포트의 Slack DM 수신 대상을 찾을 수 없습니다.",
-        "관리자 계정에서 role=총괄관리자, 활성 상태인 계정을 1개 이상 준비하세요."
+        "원장 리포트 수신 대상",
+        "warn",
+        `수신자 지정 기능 SQL 미실행 · 활성 총괄관리자 ${recipients.length}명에게 발송됩니다.`,
+        emails,
+        "Supabase SQL Editor에서 e-evaluation-v3.0-internal-report-recipients.sql을 1회 실행하면 수신자를 직접 지정할 수 있습니다."
       );
     }
 
-    if (!adminsWithEmail.length) {
+    if (lookup.usedSuperAdminFallback) {
       return checkRow(
         "super_admins",
-        "총괄관리자 DM 대상",
-        "fail",
-        "활성 총괄관리자 계정은 있지만 이메일이 없습니다.",
-        `${admins.length}개 계정 확인됨`,
-        "Slack 계정 이메일과 같은 이메일을 총괄관리자 계정에 입력하세요."
+        "원장 리포트 수신 대상",
+        "warn",
+        `지정된 수신자가 없어 활성 총괄관리자 ${recipients.length}명에게 발송됩니다.`,
+        emails,
+        "관리자 계정 메뉴에서 '원장 리포트 수신'을 켜면 지정한 사람에게만 발송됩니다."
       );
     }
 
     return checkRow(
       "super_admins",
-      "총괄관리자 DM 대상",
+      "원장 리포트 수신 대상",
       "ok",
-      `활성 총괄관리자 ${adminsWithEmail.length}명 확인`,
-      adminsWithEmail.map((admin: any) => admin.email).join(", "),
+      `지정 수신자 ${recipients.length}명 확인`,
+      emails,
       ""
     );
   } catch (error: any) {
     return checkRow(
       "super_admins",
-      "총괄관리자 DM 대상",
+      "원장 리포트 수신 대상",
       "fail",
-      "총괄관리자 계정 점검 중 오류가 발생했습니다.",
+      "원장 리포트 수신 대상 점검 중 오류가 발생했습니다.",
       toSafeErrorMessage(error),
       "관리자 계정과 Supabase 연결을 확인하세요."
     );
@@ -596,7 +592,9 @@ export async function GET(request: NextRequest) {
     const criticalFailures = checks.filter((item) => item.status === "fail" && item.severity === "critical");
     const warnings = checks.filter((item) => item.status === "warn");
     const slackOk = checks.find((item) => item.key === "slack_token")?.ok && checks.find((item) => item.key === "slack_auth")?.status !== "fail";
-    const superAdminOk = checks.find((item) => item.key === "super_admins")?.ok;
+    // 수신자 지정 SQL 미실행(=warn)이라도 총괄관리자 대체 발송은 동작하므로 '준비됨'으로 봅니다.
+    const recipientCheck = checks.find((item) => item.key === "super_admins");
+    const superAdminOk = Boolean(recipientCheck) && recipientCheck?.status !== "fail";
     const readyForInternalReport = criticalFailures.length === 0 && Boolean(slackOk) && Boolean(superAdminOk);
 
     await logAction(supabase, guard.admin, "run_report_environment_diagnostics", "system", null, {

@@ -2,6 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAdmin, adminSafeProfile, getAdminSessionFromRequest } from "@/lib/adminGuard";
 import { getSupabaseAdmin } from "@/lib/supabaseServer";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { isMissingColumnError } from "@/lib/internalReportRecipients";
+
+const ADMIN_PROFILE_COLUMNS = "id, email, name, role, is_active, last_login_at, created_at, updated_at, memo";
+
+// receives_internal_report 컬럼은 v2.6.19 SQL을 실행한 뒤에만 존재합니다.
+// 아직 실행 전이어도 관리자 화면 전체가 멈추지 않도록, 컬럼이 없으면 기존 컬럼만으로 다시 조회합니다.
+async function loadAdminProfiles(supabase: any) {
+  const withFlag = await supabase
+    .from("admin_profiles")
+    .select(`${ADMIN_PROFILE_COLUMNS}, receives_internal_report`)
+    .order("created_at", { ascending: true });
+
+  if (!withFlag.error || !isMissingColumnError(withFlag.error)) return withFlag;
+
+  return supabase
+    .from("admin_profiles")
+    .select(ADMIN_PROFILE_COLUMNS)
+    .order("created_at", { ascending: true });
+}
 
 export async function GET(request: NextRequest) {
   const guard = requireAdmin(request, "view_dashboard");
@@ -70,7 +89,7 @@ export async function GET(request: NextRequest) {
         .order("created_at", { ascending: false })
         .limit(500),
       currentAdmin?.role === "super_admin"
-        ? supabase.from("admin_profiles").select("id, email, name, role, is_active, last_login_at, created_at, updated_at, memo").order("created_at", { ascending: true })
+        ? loadAdminProfiles(supabase)
         : Promise.resolve({ data: [], error: null }),
       currentAdmin?.role === "super_admin"
         ? supabase.from("admin_login_logs").select("*, admin_profiles(id, name, email, role)").order("created_at", { ascending: false }).limit(30)

@@ -6,6 +6,7 @@ import {
   requireAdmin
 } from "@/lib/adminAuth";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { isMissingColumnError } from "@/lib/internalReportRecipients";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,6 +27,24 @@ function publicAdmin(row: any) {
     has_password: Boolean(password_hash)
   };
 }
+
+// v2.6.19 SQL(receives_internal_report 컬럼 추가)을 아직 실행하지 않은 환경에서도
+// 관리자 계정 저장 자체는 실패하지 않도록, 해당 필드만 빼고 한 번 더 시도합니다.
+async function runWithoutMissingColumn(run: (payload: any) => Promise<any>, payload: any) {
+  const first = await run(payload);
+  if (!first.error || !isMissingColumnError(first.error)) {
+    return { result: first, droppedInternalReportField: false };
+  }
+  const { receives_internal_report, ...rest } = payload || {};
+  if (receives_internal_report === undefined) {
+    return { result: first, droppedInternalReportField: false };
+  }
+  const second = await run(rest);
+  return { result: second, droppedInternalReportField: true };
+}
+
+const MIGRATION_NOTICE =
+  "'원장 리포트 수신' 설정은 저장하지 못했습니다. Supabase SQL Editor에서 e-evaluation-v3.0-internal-report-recipients.sql을 1회 실행해주세요.";
 
 export async function GET(request: NextRequest) {
   const guard = requireAdmin(request, "manage_admins");
@@ -80,34 +99,41 @@ export async function POST(request: NextRequest) {
     const { salt, hash } = hashPassword(password);
     const supabase = getSupabaseAdmin();
 
-    const inserted = await supabase
-      .from("admin_profiles")
-      .upsert(
-        {
-          email,
-          name,
-          role,
-          is_active: body.is_active !== false,
-          memo: clean(body.memo),
-          password_salt: salt,
-          password_hash: hash,
-          password_updated_at: new Date().toISOString(),
-          created_by: guard.admin.adminId,
-          updated_at: new Date().toISOString()
-        },
-        { onConflict: "email" }
-      )
-      .select("*")
-      .single();
+    const { result: inserted, droppedInternalReportField } = await runWithoutMissingColumn(
+      (payload: any) =>
+        supabase
+          .from("admin_profiles")
+          .upsert(payload, { onConflict: "email" })
+          .select("*")
+          .single(),
+      {
+        email,
+        name,
+        role,
+        is_active: body.is_active !== false,
+        receives_internal_report: body.receives_internal_report === true,
+        memo: clean(body.memo),
+        password_salt: salt,
+        password_hash: hash,
+        password_updated_at: new Date().toISOString(),
+        created_by: guard.admin.adminId,
+        updated_at: new Date().toISOString()
+      }
+    );
 
     if (inserted.error) throw inserted.error;
 
     await logAction(supabase, guard.admin, "admin.create_or_update", "admin_profiles", inserted.data.id, {
       email,
-      role
+      role,
+      receivesInternalReport: body.receives_internal_report === true
     });
 
-    return NextResponse.json({ ok: true, admin: publicAdmin(inserted.data) });
+    return NextResponse.json({
+      ok: true,
+      admin: publicAdmin(inserted.data),
+      warning: droppedInternalReportField ? MIGRATION_NOTICE : undefined
+    });
   } catch (error: any) {
     return NextResponse.json({ error: toSafeErrorMessage(error) }, { status: 500 });
   }
@@ -132,6 +158,7 @@ export async function PATCH(request: NextRequest) {
     if (clean(body.name)) patch.name = clean(body.name);
     if (body.role === "super_admin" || body.role === "general_admin") patch.role = body.role;
     if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
+    if (typeof body.receives_internal_report === "boolean") patch.receives_internal_report = body.receives_internal_report;
     if (body.memo !== undefined) patch.memo = clean(body.memo);
 
     if (String(body.password || "").trim()) {
@@ -152,12 +179,16 @@ export async function PATCH(request: NextRequest) {
     }
 
     const supabase = getSupabaseAdmin();
-    const updated = await supabase
-      .from("admin_profiles")
-      .update(patch)
-      .eq("id", id)
-      .select("*")
-      .single();
+    const { result: updated, droppedInternalReportField } = await runWithoutMissingColumn(
+      (payload: any) =>
+        supabase
+          .from("admin_profiles")
+          .update(payload)
+          .eq("id", id)
+          .select("*")
+          .single(),
+      patch
+    );
 
     if (updated.error) throw updated.error;
 
@@ -165,7 +196,11 @@ export async function PATCH(request: NextRequest) {
       changed: Object.keys(patch)
     });
 
-    return NextResponse.json({ ok: true, admin: publicAdmin(updated.data) });
+    return NextResponse.json({
+      ok: true,
+      admin: publicAdmin(updated.data),
+      warning: droppedInternalReportField ? MIGRATION_NOTICE : undefined
+    });
   } catch (error: any) {
     return NextResponse.json({ error: toSafeErrorMessage(error) }, { status: 500 });
   }
