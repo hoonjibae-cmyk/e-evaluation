@@ -1759,6 +1759,7 @@ export default function AdminPage() {
   const [currentAdmin, setCurrentAdmin] = useState<any>(null);
   const [rememberMe, setRememberMe] = useState(false);
   const [showInitialSetup, setShowInitialSetup] = useState(false);
+  const [slackAuthStatus, setSlackAuthStatus] = useState({ configured: false, enforced: false });
   const [tab, setTab] = useState<TabKey>("home");
   const [data, setData] = useState<any>(null);
   // 평가월별 응답(답변 포함) 캐시. 부트스트랩에서 전체 기간 응답을 빼고, 필요한 평가월만 지연 로드합니다.
@@ -1911,17 +1912,51 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    const { token, admin, remember } = readStoredAdminSession();
-    setRememberMe(remember);
-    // 저장된 토큰이 없거나 만료됐으면 '로그인된 것처럼' 보이지 않도록 정리하고 로그인 화면을 띄웁니다.
-    if (!token || !isAdminTokenValid(token)) {
+    let active = true;
+    async function restoreSession() {
+      const status = await fetch("/api/admin/auth/slack/status", { cache: "no-store" })
+        .then((res) => res.json()).catch(() => ({ configured: false, enforced: false }));
+      if (!active) return;
+      setSlackAuthStatus(status);
+      const authError = new URLSearchParams(window.location.search).get("auth_error");
+      if (authError) {
+        const messages: Record<string, string> = {
+          access_denied: "HR Manager에 등록된 재직·소속·Slack 계정 정보를 확인할 수 없어 입장을 허용하지 않았습니다.",
+          invalid_state: "로그인 요청이 만료되었습니다. 다시 시도해주세요.",
+          not_ready: "Slack 로그인 설정이 아직 완료되지 않았습니다.",
+          login_failed: "Slack 로그인 처리에 실패했습니다. 잠시 후 다시 시도해주세요."
+        };
+        setMessage(messages[authError] || messages.login_failed);
+        window.history.replaceState(null, "", "/admin");
+      }
+      const cookieSession = await fetch("/api/admin/auth/me", { cache: "no-store" })
+        .then((res) => res.ok ? res.json() : null).catch(() => null);
+      if (!active) return;
+      if (cookieSession?.admin) {
+        clearStoredAdminSession();
+        setCurrentAdmin(cookieSession.admin);
+        setSessionToken("slack-cookie");
+        return;
+      }
+      const { token, remember } = readStoredAdminSession();
+      setRememberMe(remember);
+      if (token && isAdminTokenValid(token)) {
+        const legacySession = await fetch("/api/admin/auth/me", {
+          headers: { "x-admin-session": token }, cache: "no-store"
+        }).then((res) => res.ok ? res.json() : null).catch(() => null);
+        if (!active) return;
+        if (legacySession?.admin) {
+          setCurrentAdmin(legacySession.admin);
+          setSessionToken(token);
+          return;
+        }
+      }
       clearStoredAdminSession();
       setSessionToken("");
       setCurrentAdmin(null);
-      return;
     }
-    setSessionToken(token);
-    if (admin) setCurrentAdmin(admin);
+    void restoreSession();
+    return () => { active = false; };
   }, []);
 
   useEffect(() => {
@@ -2200,6 +2235,7 @@ export default function AdminPage() {
   }
 
   async function logoutAdmin() {
+    await fetch("/api/admin/auth/logout", { method: "POST" }).catch(() => null);
     clearStoredAdminSession();
     setSessionToken("");
     setCurrentAdmin(null);
@@ -5102,11 +5138,22 @@ export default function AdminPage() {
           <div className="brand" style={{ marginTop: 14 }}>e강의평가 관리자</div>
           <div className="version-pill" style={{ marginTop: 10 }}>버전 {APP_VERSION}</div>
           <h1 className="h1" style={{ marginTop: 16 }}>관리자 로그인</h1>
-          <p className="muted">
-            v1.6부터 관리자 코드 대신 관리자 계정으로 로그인합니다. 처음 1회는 아래의 “초기 총괄관리자 만들기”를 사용하세요.
-          </p>
+          <p className="muted">HR Manager에 등록된 경영지원·교육운영팀 재직자가 Slack 계정으로 로그인할 수 있습니다.</p>
 
           {message && <div className="notice" style={{ margin: "14px 0" }}>{message}</div>}
+
+          {slackAuthStatus.configured && (
+            <div className="form-row" style={{ marginTop: 18 }}>
+              <a className="btn full" href="/api/admin/auth/slack">Slack으로 로그인</a>
+            </div>
+          )}
+          {slackAuthStatus.enforced && !slackAuthStatus.configured && (
+            <div className="notice">Slack 로그인 연결이 준비되지 않았습니다. 운영 관리자에게 알려주세요.</div>
+          )}
+
+          {!slackAuthStatus.enforced && <>
+          {slackAuthStatus.configured && <div className="divider" />}
+          <p className="muted">기존 관리자 계정 로그인</p>
 
           <div className="form-row">
             <label className="label">이메일</label>
@@ -5159,6 +5206,7 @@ export default function AdminPage() {
               <button className="btn" style={{ marginTop: 12 }} onClick={createFirstSuperAdmin}>총괄관리자 만들기</button>
             </div>
           )}
+          </>}
         </div>
       </main>
     );
@@ -6078,9 +6126,12 @@ export default function AdminPage() {
           <section className="card">
             <h1 className="h1">관리자 계정</h1>
             <p className="muted">
-              총괄관리자만 접근할 수 있습니다. 일반관리자는 QR 출력, 제출 현황, 결과 분석, 결과지 출력 중심으로 제한됩니다.
+              {slackAuthStatus.enforced
+                ? "직원 이름과 권한은 Slack 로그인 시 HR Manager의 재직·소속 정보를 확인해 자동으로 반영됩니다. 여기서는 계정 사용 여부와 원장 리포트 수신을 관리합니다."
+                : "총괄관리자만 접근할 수 있습니다. 일반관리자는 QR 출력, 제출 현황, 결과 분석, 결과지 출력 중심으로 제한됩니다."}
             </p>
 
+            {!slackAuthStatus.enforced && (
             <div className="card" style={{ marginTop: 18 }}>
               <h2 className="h2">관리자 추가</h2>
               <div className="grid grid-3">
@@ -6127,6 +6178,13 @@ export default function AdminPage() {
               </div>
               <button className="btn" style={{ marginTop: 12 }} onClick={createAdminAccount}>관리자 계정 저장</button>
             </div>
+            )}
+
+            {slackAuthStatus.enforced && (
+              <div className="notice" style={{ marginTop: 18 }}>
+                목록에는 e강의평가에 한 번 이상 Slack으로 로그인한 직원이 나타납니다. 신규 직원은 첫 로그인 시 자동 등록됩니다.
+              </div>
+            )}
 
             <div className="table-wrap" style={{ marginTop: 18 }}>
               <table>
@@ -6138,7 +6196,7 @@ export default function AdminPage() {
                     <th>상태</th>
                     <th>원장 리포트 수신</th>
                     <th>마지막 로그인</th>
-                    <th>비밀번호 재설정</th>
+                    {!slackAuthStatus.enforced && <th>비밀번호 재설정</th>}
                     <th>기능</th>
                   </tr>
                 </thead>
@@ -6149,13 +6207,17 @@ export default function AdminPage() {
                       <tr key={admin.id}>
                         <td>{admin.email}</td>
                         <td>
+                          {slackAuthStatus.enforced ? admin.name :
                           <input className="input" value={draft.name || ""} onChange={(e) => setAdminDrafts({ ...adminDrafts, [admin.id]: { ...draft, name: e.target.value } })} />
+                          }
                         </td>
                         <td>
+                          {slackAuthStatus.enforced ? roleLabels[admin.role] || admin.role :
                           <select className="select" value={draft.role || admin.role} onChange={(e) => setAdminDrafts({ ...adminDrafts, [admin.id]: { ...draft, role: e.target.value } })}>
                             <option value="general_admin">일반관리자</option>
                             <option value="super_admin">총괄관리자</option>
                           </select>
+                          }
                         </td>
                         <td>
                           <select className="select" value={(draft.is_active ?? admin.is_active) ? "active" : "inactive"} onChange={(e) => setAdminDrafts({ ...adminDrafts, [admin.id]: { ...draft, is_active: e.target.value === "active" } })}>
@@ -6174,9 +6236,9 @@ export default function AdminPage() {
                           </label>
                         </td>
                         <td>{formatDateTime(admin.last_login_at)}</td>
-                        <td>
+                        {!slackAuthStatus.enforced && <td>
                           <input className="input" type="password" value={draft.password || ""} onChange={(e) => setAdminDrafts({ ...adminDrafts, [admin.id]: { ...draft, password: e.target.value } })} placeholder="변경할 때만 입력" />
-                        </td>
+                        </td>}
                         <td>
                           <button className="btn secondary" onClick={() => updateAdminAccount(admin.id)}>저장</button>
                         </td>

@@ -7,6 +7,7 @@ import {
 } from "@/lib/adminAuth";
 import { toSafeErrorMessage } from "@/lib/apiError";
 import { isMissingColumnError } from "@/lib/internalReportRecipients";
+import { slackLoginEnforced } from "@/lib/slackAdminAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,7 +31,7 @@ function publicAdmin(row: any) {
 
 // v2.6.19 SQL(receives_internal_report 컬럼 추가)을 아직 실행하지 않은 환경에서도
 // 관리자 계정 저장 자체는 실패하지 않도록, 해당 필드만 빼고 한 번 더 시도합니다.
-async function runWithoutMissingColumn(run: (payload: any) => Promise<any>, payload: any) {
+async function runWithoutMissingColumn(run: (payload: any) => PromiseLike<any>, payload: any) {
   const first = await run(payload);
   if (!first.error || !isMissingColumnError(first.error)) {
     return { result: first, droppedInternalReportField: false };
@@ -78,6 +79,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   const guard = requireAdmin(request, "manage_admins");
   if (!guard.ok) return guard.response;
+  if (slackLoginEnforced()) return NextResponse.json({ error: "직원 계정은 HR Manager의 재직 정보로 자동 생성됩니다." }, { status: 403 });
 
   try {
     const body = await request.json();
@@ -155,13 +157,13 @@ export async function PATCH(request: NextRequest) {
       updated_at: new Date().toISOString()
     };
 
-    if (clean(body.name)) patch.name = clean(body.name);
-    if (body.role === "super_admin" || body.role === "general_admin") patch.role = body.role;
+    if (!slackLoginEnforced() && clean(body.name)) patch.name = clean(body.name);
+    if (!slackLoginEnforced() && (body.role === "super_admin" || body.role === "general_admin")) patch.role = body.role;
     if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
     if (typeof body.receives_internal_report === "boolean") patch.receives_internal_report = body.receives_internal_report;
     if (body.memo !== undefined) patch.memo = clean(body.memo);
 
-    if (String(body.password || "").trim()) {
+    if (!slackLoginEnforced() && String(body.password || "").trim()) {
       const password = String(body.password);
       if (password.length < 8) {
         return NextResponse.json({ error: "비밀번호는 8자 이상이어야 합니다." }, { status: 400 });
