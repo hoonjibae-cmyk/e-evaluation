@@ -7,6 +7,7 @@ import {
   verifyPassword
 } from "@/lib/adminAuth";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { slackLoginEnforced } from "@/lib/slackAdminAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,6 +25,7 @@ async function writeLoginLog(supabase: any, row: any) {
 }
 
 export async function POST(request: NextRequest) {
+  if (slackLoginEnforced()) return NextResponse.json({ error: "Slack으로 로그인해주세요." }, { status: 403 });
   try {
     const { email, password, remember } = await request.json();
     const normalizedEmail = normalizeEmail(email);

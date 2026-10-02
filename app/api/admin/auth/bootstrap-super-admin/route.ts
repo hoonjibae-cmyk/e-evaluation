@@ -7,6 +7,7 @@ import {
   logAction
 } from "@/lib/adminAuth";
 import { toSafeErrorMessage } from "@/lib/apiError";
+import { slackLoginEnforced } from "@/lib/slackAdminAuth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,6 +21,7 @@ function normalizeEmail(value: any) {
 }
 
 export async function POST(request: NextRequest) {
+  if (slackLoginEnforced()) return NextResponse.json({ error: "Slack 로그인 체제에서는 초기 계정 생성을 사용할 수 없습니다." }, { status: 403 });
   try {
     const body = await request.json();
     const setupCode = clean(body.setupCode);

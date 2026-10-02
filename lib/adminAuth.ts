@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
+import { ADMIN_SESSION_COOKIE, slackLoginEnforced } from "./slackAdminAuth";
 
 export type AdminRole = "super_admin" | "general_admin";
 
@@ -10,6 +11,8 @@ export type AdminSession = {
   role: AdminRole;
   exp: number;
   iat: number;
+  authSource?: "slack";
+  slackUserId?: string;
 };
 
 export type AdminPermission =
@@ -96,6 +99,8 @@ export function createAdminSessionToken(admin: {
   email: string;
   name: string;
   role: AdminRole;
+  authSource?: "slack";
+  slackUserId?: string;
 }, ttlHours?: number) {
   const now = Math.floor(Date.now() / 1000);
   const hours = Number.isFinite(ttlHours as number) && (ttlHours as number) > 0 ? (ttlHours as number) : SESSION_HOURS;
@@ -104,6 +109,7 @@ export function createAdminSessionToken(admin: {
     email: admin.email,
     name: admin.name,
     role: admin.role,
+    ...(admin.authSource === "slack" ? { authSource: "slack" as const, slackUserId: admin.slackUserId } : {}),
     iat: now,
     exp: now + hours * 60 * 60
   };
@@ -128,6 +134,7 @@ export function parseAdminSessionToken(token: string | null): AdminSession | nul
     if (!payload?.adminId || !payload?.email || !payload?.role || !payload?.exp) return null;
     if (payload.exp < Math.floor(Date.now() / 1000)) return null;
     if (!["super_admin", "general_admin"].includes(payload.role)) return null;
+    if (slackLoginEnforced() && (payload.authSource !== "slack" || !payload.slackUserId)) return null;
 
     return payload;
   } catch {
@@ -139,7 +146,7 @@ export function getAdminSessionFromRequest(request: NextRequest) {
   const bearer = request.headers.get("authorization") || "";
   const bearerToken = bearer.toLowerCase().startsWith("bearer ") ? bearer.slice(7) : "";
   const token = request.headers.get("x-admin-session") || bearerToken;
-  return parseAdminSessionToken(token);
+  return parseAdminSessionToken(token) || parseAdminSessionToken(request.cookies.get(ADMIN_SESSION_COOKIE)?.value || null);
 }
 
 export function hasPermission(admin: AdminSession | null, permission?: AdminPermission) {
