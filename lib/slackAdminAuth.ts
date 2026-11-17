@@ -7,7 +7,7 @@ const jwks = createRemoteJWKSet(new URL("https://slack.com/openid/connect/keys")
 export const ADMIN_OAUTH_COOKIE = "ee_admin_oauth";
 export const ADMIN_SESSION_COOKIE = "ee_admin_session";
 
-type OAuthFlow = { state: string; nonce: string; issuedAt: number };
+type OAuthFlow = { state: string; nonce: string; issuedAt: number; expectedSlackUserId?: string };
 
 export function signOAuthFlow(flow: OAuthFlow) {
   const body = Buffer.from(JSON.stringify(flow)).toString("base64url");
@@ -27,7 +27,8 @@ export function parseOAuthFlow(token: string | undefined): OAuthFlow | null {
     const flow = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as OAuthFlow;
     if (typeof flow.state !== "string" || !flow.state || typeof flow.nonce !== "string" || !flow.nonce ||
         typeof flow.issuedAt !== "number" || Date.now() - flow.issuedAt > 600000 ||
-        flow.issuedAt > Date.now() + 30000) return null;
+        flow.issuedAt > Date.now() + 30000 ||
+        (flow.expectedSlackUserId !== undefined && !/^[UW][A-Z0-9]{5,30}$/.test(flow.expectedSlackUserId))) return null;
     return flow;
   } catch {
     return null;

@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
   function finish(error?: string, session?: string) {
     const response = NextResponse.redirect(`${origin}/admin${error ? `?auth_error=${encodeURIComponent(error)}` : ""}`);
     response.cookies.set(ADMIN_OAUTH_COOKIE, "", cookieOptions(0));
-    if (session) response.cookies.set(ADMIN_SESSION_COOKIE, session, cookieOptions(60 * 60));
+    response.cookies.set(ADMIN_SESSION_COOKIE, session || '', cookieOptions(session ? 60 * 60 : 0));
     response.headers.set("Cache-Control", "no-store");
     return response;
   }
@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     if (!flow || flow.state !== state) return finish("invalid_state");
 
     const identity = await exchangeSlackCode(code, flow.nonce, `${origin}/api/admin/auth/slack/callback`);
+    if (flow.expectedSlackUserId && identity.slackUserId !== flow.expectedSlackUserId) return finish('account_mismatch');
     const staff = await findHrEvaluationStaff(identity);
     if (!staff) return finish("access_denied");
     const role = roleForStaff(staff);

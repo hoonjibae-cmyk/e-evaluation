@@ -1930,6 +1930,7 @@ export default function AdminPage() {
         const messages: Record<string, string> = {
           access_denied: "HR Manager에 등록된 재직·소속·Slack 계정 정보를 확인할 수 없어 입장을 허용하지 않았습니다.",
           invalid_state: "로그인 요청이 만료되었습니다. 다시 시도해주세요.",
+          account_mismatch: "포털과 다른 Slack 계정입니다. 포털에 로그인한 Slack 계정을 선택해 다시 시도해 주세요.",
           not_ready: "Slack 로그인 설정이 아직 완료되지 않았습니다.",
           login_failed: "Slack 로그인 처리에 실패했습니다. 잠시 후 다시 시도해주세요."
         };
